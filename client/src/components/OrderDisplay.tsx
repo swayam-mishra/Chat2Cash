@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { User, MapPin, FileText, Loader2, CheckCircle, AlertTriangle, Check, Download } from 'lucide-react';
+import { User, MapPin, FileText, Loader2, CheckCircle, AlertTriangle, Check, Download, CreditCard, Copy, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 
 // Declare jsPDF on window for TypeScript since we are using the CDN version
 declare global {
@@ -40,6 +41,8 @@ function getConfidenceExplanation(level: string) {
 export function OrderDisplay({ order }: OrderDisplayProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [invoice, setInvoice] = useState<any>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentData, setPaymentData] = useState<{link: string, qr: string} | null>(null);
 
   const generatePDF = (invoiceData: any) => {
     try {
@@ -188,6 +191,28 @@ export function OrderDisplay({ order }: OrderDisplayProps) {
     }
   };
 
+  const generatePaymentLink = () => {
+    if (!order) return;
+    
+    // Create UPI link
+    // Note: Using a dummy VPA for simulation. In production, this would be the merchant's VPA.
+    const paymentLink = `upi://pay?pa=chat2cash@paytm&pn=Chat2Cash&am=${order.total || 0}&cu=INR`;
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(paymentLink)}`;
+    
+    setPaymentData({
+      link: paymentLink,
+      qr: qrCodeUrl
+    });
+    setShowPaymentModal(true);
+  };
+
+  const copyPaymentLink = () => {
+    if (paymentData?.link) {
+      navigator.clipboard.writeText(paymentData.link);
+      toast.success("Payment link copied to clipboard");
+    }
+  };
+
   if (!order) {
     return (
       <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] p-6 w-full max-w-[400px] min-h-[700px]">
@@ -203,131 +228,195 @@ export function OrderDisplay({ order }: OrderDisplayProps) {
   }
 
   return (
-    <div 
-      key={order.id} 
-      className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] p-6 w-full max-w-[400px] min-h-[700px] animate-in slide-in-from-right-8 fade-in duration-700"
-    >
-      <h2 className="text-xl font-semibold text-gray-800 mb-6">Extracted Order</h2>
-      
-      <div className="border-2 border-[#00a884] rounded-lg p-6 space-y-6 bg-white shadow-sm relative overflow-hidden">
+    <>
+      <div 
+        key={order.id} 
+        className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] p-6 w-full max-w-[400px] min-h-[700px] animate-in slide-in-from-right-8 fade-in duration-700"
+      >
+        <h2 className="text-xl font-semibold text-gray-800 mb-6">Extracted Order</h2>
         
-        {/* Confidence Ribbon */}
-        <div className="absolute top-0 right-0">
-            <div className={`text-[10px] font-bold px-3 py-1 text-white uppercase rounded-bl-lg ${
-                order.confidence === 'high' ? 'bg-[#00a884]' : 'bg-orange-500'
-            }`}>
-                {order.confidence} Confidence
-            </div>
-        </div>
-
-        {/* Customer info */}
-        <div className="flex items-center gap-3 pb-5 border-b border-gray-200">
-          <div className="w-10 h-10 bg-[#00a884]/10 rounded-full flex items-center justify-center flex-shrink-0">
-            <User className="w-5 h-5 text-[#00a884]" />
-          </div>
-          <div>
-            <p className="font-semibold text-gray-900">{order.customer_name || 'Unknown Customer'}</p>
-            <p className="text-sm text-gray-500">WhatsApp Contact</p>
-          </div>
-        </div>
-
-        {/* Items section */}
-        <div className="space-y-4">
-          <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">Order Items</h3>
-          <div className="space-y-3 max-h-[200px] overflow-y-auto">
-            {order.items?.map((item: any, idx: number) => (
-              <div key={idx} className="border-l-4 border-[#00a884] pl-4 py-2.5 bg-gray-50/50 rounded-r">
-                <p className="text-sm font-semibold text-gray-900">
-                  {item.quantity}x {item.product_name}
-                </p>
-                <p className="text-sm text-gray-600 mt-0.5">
-                  {item.price ? `₹${item.price.toLocaleString('en-IN')} each` : 'Price not detected'}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Delivery info */}
-        <div className="flex items-start gap-3 py-4 bg-gray-50/50 rounded-lg px-4">
-          <div className="w-10 h-10 bg-[#00a884]/10 rounded-full flex items-center justify-center flex-shrink-0">
-            <MapPin className="w-5 h-5 text-[#00a884]" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-gray-800">Delivery Address</p>
-            <p className="text-sm text-gray-600 mt-1 leading-relaxed">
-              {order.delivery_address || 'No address found in chat'}
-            </p>
-          </div>
-        </div>
-
-        {/* Total amount */}
-        <div className="pt-5 border-t-2 border-gray-200 space-y-4">
-          <div className="flex justify-between items-center">
-            <span className="text-base font-semibold text-gray-700">Total Amount</span>
-            <span className="text-3xl font-bold text-[#00a884]">
-              {order.total ? `₹${order.total.toLocaleString('en-IN')}` : '₹0'}
-            </span>
-          </div>
-        </div>
-
-        {/* Confidence Score Visualization */}
-        <div className="mt-2 pt-4 border-t border-gray-100">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">AI Confidence Score</span>
-            <span className={`text-xs font-bold ${
-              order.confidence === 'high' ? 'text-[#00a884]' : 
-              order.confidence === 'medium' ? 'text-yellow-600' : 'text-red-600'
-            }`}>
-              {getConfidenceWidth(order.confidence)}%
-            </span>
-          </div>
+        <div className="border-2 border-[#00a884] rounded-lg p-6 space-y-6 bg-white shadow-sm relative overflow-hidden">
           
-          <div className="h-2.5 w-full bg-gray-200 rounded-full overflow-hidden">
-            <div 
-              className={`h-full rounded-full transition-all duration-1000 ease-out ${getConfidenceColor(order.confidence)}`}
-              style={{ width: `${getConfidenceWidth(order.confidence)}%` }}
-            />
+          {/* Confidence Ribbon */}
+          <div className="absolute top-0 right-0">
+              <div className={`text-[10px] font-bold px-3 py-1 text-white uppercase rounded-bl-lg ${
+                  order.confidence === 'high' ? 'bg-[#00a884]' : 'bg-orange-500'
+              }`}>
+                  {order.confidence} Confidence
+              </div>
           </div>
 
-          <div className="flex items-start gap-1.5 mt-2 text-xs text-gray-500">
-             {order.confidence === 'high' ? (
-               <Check className="w-3.5 h-3.5 text-[#00a884] flex-shrink-0" /> 
-             ) : (
-               <AlertTriangle className="w-3.5 h-3.5 text-yellow-500 flex-shrink-0" />
-             )}
-             <span>{getConfidenceExplanation(order.confidence)}</span>
+          {/* Customer info */}
+          <div className="flex items-center gap-3 pb-5 border-b border-gray-200">
+            <div className="w-10 h-10 bg-[#00a884]/10 rounded-full flex items-center justify-center flex-shrink-0">
+              <User className="w-5 h-5 text-[#00a884]" />
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">{order.customer_name || 'Unknown Customer'}</p>
+              <p className="text-sm text-gray-500">WhatsApp Contact</p>
+            </div>
+          </div>
+
+          {/* Items section */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">Order Items</h3>
+            <div className="space-y-3 max-h-[200px] overflow-y-auto">
+              {order.items?.map((item: any, idx: number) => (
+                <div key={idx} className="border-l-4 border-[#00a884] pl-4 py-2.5 bg-gray-50/50 rounded-r">
+                  <p className="text-sm font-semibold text-gray-900">
+                    {item.quantity}x {item.product_name}
+                  </p>
+                  <p className="text-sm text-gray-600 mt-0.5">
+                    {item.price ? `₹${item.price.toLocaleString('en-IN')} each` : 'Price not detected'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Delivery info */}
+          <div className="flex items-start gap-3 py-4 bg-gray-50/50 rounded-lg px-4">
+            <div className="w-10 h-10 bg-[#00a884]/10 rounded-full flex items-center justify-center flex-shrink-0">
+              <MapPin className="w-5 h-5 text-[#00a884]" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-800">Delivery Address</p>
+              <p className="text-sm text-gray-600 mt-1 leading-relaxed">
+                {order.delivery_address || 'No address found in chat'}
+              </p>
+            </div>
+          </div>
+
+          {/* Total amount */}
+          <div className="pt-5 border-t-2 border-gray-200 space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-base font-semibold text-gray-700">Total Amount</span>
+              <span className="text-3xl font-bold text-[#00a884]">
+                {order.total ? `₹${order.total.toLocaleString('en-IN')}` : '₹0'}
+              </span>
+            </div>
+          </div>
+
+          {/* Confidence Score Visualization */}
+          <div className="mt-2 pt-4 border-t border-gray-100">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">AI Confidence Score</span>
+              <span className={`text-xs font-bold ${
+                order.confidence === 'high' ? 'text-[#00a884]' : 
+                order.confidence === 'medium' ? 'text-yellow-600' : 'text-red-600'
+              }`}>
+                {getConfidenceWidth(order.confidence)}%
+              </span>
+            </div>
+            
+            <div className="h-2.5 w-full bg-gray-200 rounded-full overflow-hidden">
+              <div 
+                className={`h-full rounded-full transition-all duration-1000 ease-out ${getConfidenceColor(order.confidence)}`}
+                style={{ width: `${getConfidenceWidth(order.confidence)}%` }}
+              />
+            </div>
+
+            <div className="flex items-start gap-1.5 mt-2 text-xs text-gray-500">
+               {order.confidence === 'high' ? (
+                 <Check className="w-3.5 h-3.5 text-[#00a884] flex-shrink-0" /> 
+               ) : (
+                 <AlertTriangle className="w-3.5 h-3.5 text-yellow-500 flex-shrink-0" />
+               )}
+               <span>{getConfidenceExplanation(order.confidence)}</span>
+            </div>
+          </div>
+
+          <div className="space-y-3 pt-2">
+            {/* Generate Invoice button */}
+            {invoice ? (
+               <div className="flex gap-2 w-full">
+                 <button 
+                   onClick={() => generatePDF(invoice)}
+                   className="flex-1 py-3.5 bg-gray-800 hover:bg-gray-900 text-white font-semibold rounded-lg shadow-sm flex items-center justify-center gap-2 transition-all active:scale-[0.99]"
+                 >
+                   <Download className="w-4 h-4" />
+                   Download PDF
+                 </button>
+                 <button 
+                    className="w-12 bg-green-100 text-green-700 rounded-lg flex items-center justify-center border border-green-200 cursor-default"
+                    title="Invoice Generated"
+                  >
+                    <CheckCircle className="w-5 h-5" />
+                 </button>
+               </div>
+            ) : (
+                <button 
+                  onClick={handleGenerateInvoice}
+                  disabled={isGenerating}
+                  className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm transition-all hover:shadow-md active:scale-[0.99] flex items-center justify-center gap-2 disabled:bg-blue-400"
+                >
+                  {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                  {isGenerating ? 'Generating...' : 'Generate Invoice'}
+                </button>
+            )}
+
+            {/* Payment Link Button */}
+            <button 
+              onClick={generatePaymentLink}
+              className="w-full py-3.5 bg-white border-2 border-[#00a884] text-[#00a884] hover:bg-[#00a884]/5 font-semibold rounded-lg shadow-sm transition-all active:scale-[0.99] flex items-center justify-center gap-2"
+            >
+              <CreditCard className="w-4 h-4" />
+              Generate Payment Link
+            </button>
           </div>
         </div>
-
-        {/* Generate Invoice button */}
-        {invoice ? (
-           <div className="flex gap-2 w-full">
-             <button 
-               onClick={() => generatePDF(invoice)}
-               className="flex-1 py-3.5 bg-gray-800 hover:bg-gray-900 text-white font-semibold rounded-lg shadow-sm flex items-center justify-center gap-2 transition-all active:scale-[0.99]"
-             >
-               <Download className="w-4 h-4" />
-               Download PDF
-             </button>
-             <button 
-                className="w-12 bg-green-100 text-green-700 rounded-lg flex items-center justify-center border border-green-200 cursor-default"
-                title="Invoice Generated"
-              >
-                <CheckCircle className="w-5 h-5" />
-             </button>
-           </div>
-        ) : (
-            <button 
-              onClick={handleGenerateInvoice}
-              disabled={isGenerating}
-              className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm transition-all hover:shadow-md active:scale-[0.99] flex items-center justify-center gap-2 disabled:bg-blue-400"
-            >
-              {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-              {isGenerating ? 'Generating...' : 'Generate Invoice'}
-            </button>
-        )}
       </div>
-    </div>
+
+      {/* Payment Link Dialog */}
+      <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-center text-xl text-gray-800">Payment Link Generated</DialogTitle>
+            <DialogDescription className="text-center text-gray-500">
+              Share this QR code or link with the customer
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex flex-col items-center justify-center py-6 space-y-6">
+            {/* QR Code Container */}
+            <div className="p-4 bg-white border-2 border-[#00a884]/20 rounded-xl shadow-sm relative">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#00a884] text-white text-[10px] font-bold px-3 py-0.5 rounded-full">
+                UPI QR
+              </div>
+              {paymentData?.qr && (
+                <img 
+                  src={paymentData.qr} 
+                  alt="Payment QR Code" 
+                  className="w-48 h-48 object-contain"
+                />
+              )}
+            </div>
+            
+            <p className="text-sm font-medium text-gray-600">Scan to pay ₹{order?.total?.toLocaleString('en-IN')}</p>
+
+            {/* Link Copy Section */}
+            <div className="w-full">
+              <button 
+                onClick={copyPaymentLink}
+                className="w-full flex items-center justify-center gap-2 p-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-all text-gray-700 font-medium text-sm group"
+              >
+                <Copy className="w-4 h-4 text-gray-500 group-hover:text-[#00a884]" />
+                Copy Payment Link to Share
+              </button>
+              <p className="text-[10px] text-center text-gray-400 mt-2">
+                Send this link if customer cannot scan QR
+              </p>
+            </div>
+
+            <button
+               onClick={() => setShowPaymentModal(false)}
+               className="w-full py-2 text-sm text-gray-500 hover:text-gray-800 font-medium transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
