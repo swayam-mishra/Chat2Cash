@@ -1,9 +1,33 @@
 import { useState } from 'react';
-import { User, MapPin, FileText, Loader2, CheckCircle } from 'lucide-react';
+import { User, MapPin, FileText, Loader2, CheckCircle, AlertTriangle, Check } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface OrderDisplayProps {
   order: any;
+}
+
+// Helper functions for confidence visualization
+function getConfidenceWidth(level: string) {
+  const widths: Record<string, number> = { high: 95, medium: 70, low: 45 };
+  return widths[level] || 50;
+}
+
+function getConfidenceColor(level: string) {
+  const colors: Record<string, string> = {
+    high: 'bg-[#00a884]',
+    medium: 'bg-yellow-500',
+    low: 'bg-red-500'
+  };
+  return colors[level] || 'bg-gray-500';
+}
+
+function getConfidenceExplanation(level: string) {
+  const explanations: Record<string, string> = {
+    high: 'All details clearly stated in conversation',
+    medium: 'Some details inferred from context',
+    low: 'Limited information, manual verification recommended'
+  };
+  return explanations[level] || 'Confidence score unavailable';
 }
 
 export function OrderDisplay({ order }: OrderDisplayProps) {
@@ -55,14 +79,14 @@ export function OrderDisplay({ order }: OrderDisplayProps) {
 
   return (
     <div 
-      key={order.id} // Key change: Forces component re-mount to trigger animation
+      key={order.id} 
       className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] p-6 w-full max-w-[400px] min-h-[700px] animate-in slide-in-from-right-8 fade-in duration-700"
     >
       <h2 className="text-xl font-semibold text-gray-800 mb-6">Extracted Order</h2>
       
       <div className="border-2 border-[#00a884] rounded-lg p-6 space-y-6 bg-white shadow-sm relative overflow-hidden">
         
-        {/* Confidence Ribbon */}
+        {/* Confidence Ribbon - Kept for visibility, but you can remove if redundancy is an issue */}
         <div className="absolute top-0 right-0">
             <div className={`text-[10px] font-bold px-3 py-1 text-white uppercase rounded-bl-lg ${
                 order.confidence === 'high' ? 'bg-[#00a884]' : 'bg-orange-500'
@@ -85,7 +109,7 @@ export function OrderDisplay({ order }: OrderDisplayProps) {
         {/* Items section */}
         <div className="space-y-4">
           <h3 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">Order Items</h3>
-          <div className="space-y-3 max-h-[250px] overflow-y-auto">
+          <div className="space-y-3 max-h-[200px] overflow-y-auto">
             {order.items?.map((item: any, idx: number) => (
               <div key={idx} className="border-l-4 border-[#00a884] pl-4 py-2.5 bg-gray-50/50 rounded-r">
                 <p className="text-sm font-semibold text-gray-900">
@@ -119,6 +143,35 @@ export function OrderDisplay({ order }: OrderDisplayProps) {
             <span className="text-3xl font-bold text-[#00a884]">
               {order.total ? `₹${order.total.toLocaleString('en-IN')}` : '₹0'}
             </span>
+          </div>
+        </div>
+
+        {/* NEW: Confidence Score Visualization */}
+        <div className="mt-2 pt-4 border-t border-gray-100">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">AI Confidence Score</span>
+            <span className={`text-xs font-bold ${
+              order.confidence === 'high' ? 'text-[#00a884]' : 
+              order.confidence === 'medium' ? 'text-yellow-600' : 'text-red-600'
+            }`}>
+              {getConfidenceWidth(order.confidence)}%
+            </span>
+          </div>
+          
+          <div className="h-2.5 w-full bg-gray-200 rounded-full overflow-hidden">
+            <div 
+              className={`h-full rounded-full transition-all duration-1000 ease-out ${getConfidenceColor(order.confidence)}`}
+              style={{ width: `${getConfidenceWidth(order.confidence)}%` }}
+            />
+          </div>
+
+          <div className="flex items-start gap-1.5 mt-2 text-xs text-gray-500">
+             {order.confidence === 'high' ? (
+               <Check className="w-3.5 h-3.5 text-[#00a884] flex-shrink-0" /> 
+             ) : (
+               <AlertTriangle className="w-3.5 h-3.5 text-yellow-500 flex-shrink-0" />
+             )}
+             <span>{getConfidenceExplanation(order.confidence)}</span>
           </div>
         </div>
 
