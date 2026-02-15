@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Send, FileText } from 'lucide-react';
+import { Send, FileText, Mic } from 'lucide-react';
 
 interface Message {
   id: number;
@@ -54,6 +54,46 @@ export function ChatSimulator({ onExtract, extractionStatus }: ChatSimulatorProp
     setMessages(DEMO_CHAT);
   };
 
+  const addVoiceNote = () => {
+    const voiceNotes = [
+      {
+        sender: 'Priya Sharma',
+        duration: '0:24',
+        transcript: 'Hi aunty, mujhe 5 red scarf chahiye aur 2 blue dupatta. Delivery kal tak ho sakta hai kya?'
+      },
+      {
+        sender: 'Rajesh Kumar',
+        duration: '0:18',
+        transcript: 'Bhaiya wo yellow kurti jo last time bheja tha na, waise hi 10 piece chahiye'
+      }
+    ];
+
+    const note = voiceNotes[Math.floor(Math.random() * voiceNotes.length)];
+    
+    // Add voice note message
+    const voiceMsg: Message = {
+      id: Date.now(),
+      sender: note.sender,
+      text: `🎤 Voice message (${note.duration})`,
+      type: 'incoming'
+    };
+    
+    setMessages(prev => [...prev, voiceMsg]);
+    
+    // Auto-transcribe after 1.5 seconds
+    setTimeout(() => {
+      setMessages(prev => [
+        ...prev,
+        {
+          id: Date.now(),
+          sender: note.sender, // Keep sender as customer so extraction works
+          text: `📝 Transcribed: "${note.transcript}"`,
+          type: 'incoming'
+        }
+      ]);
+    }, 1500);
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] p-4 w-full max-w-[450px] flex flex-col h-[700px]">
       <div className="flex justify-between items-center mb-4">
@@ -94,21 +134,32 @@ export function ChatSimulator({ onExtract, extractionStatus }: ChatSimulatorProp
       </div>
 
       {/* Message input */}
-      <div className="flex gap-2 mt-4">
-        <input
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-          placeholder="Type a message..."
-          className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a884] text-sm"
-        />
-        <button
-          onClick={handleSend}
-          className="px-4 py-3 bg-[#00a884] hover:bg-[#008069] text-white rounded-lg transition-colors shadow-sm"
-        >
-          <Send className="w-5 h-5" />
-        </button>
+      <div className="mt-4 space-y-2">
+        <div className="flex justify-end">
+             <button 
+               onClick={addVoiceNote}
+               className="text-xs text-gray-500 hover:text-[#00a884] flex items-center gap-1 transition-colors"
+               title="Simulate receiving a voice note"
+             >
+               <Mic className="w-3 h-3" /> Simulate Voice Note
+             </button>
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+            placeholder="Type a message..."
+            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a884] text-sm"
+          />
+          <button
+            onClick={handleSend}
+            className="px-4 py-3 bg-[#00a884] hover:bg-[#008069] text-white rounded-lg transition-colors shadow-sm"
+          >
+            <Send className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       {/* Extract Order CTA */}
