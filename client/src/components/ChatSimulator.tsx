@@ -10,7 +10,8 @@ interface Message {
 
 interface ChatSimulatorProps {
   onExtract: (messages: { sender: string; text: string }[]) => void;
-  isExtracting: boolean;
+  // Key change: Accepts status string instead of boolean
+  extractionStatus: string | null;
 }
 
 // Parsed from your demo_chat_hinglish.txt
@@ -32,9 +33,12 @@ const DEMO_CHAT: Message[] = [
   { id: 15, sender: 'Rajesh Kumar', text: 'Done confirm karo. Delivery Friday tak chahiye', type: 'incoming' },
 ];
 
-export function ChatSimulator({ onExtract, isExtracting }: ChatSimulatorProps) {
+export function ChatSimulator({ onExtract, extractionStatus }: ChatSimulatorProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
+
+  // Helper to determine if we are currently busy
+  const isExtracting = extractionStatus !== null;
 
   const handleSend = () => {
     if (inputValue.trim()) {
@@ -120,7 +124,7 @@ export function ChatSimulator({ onExtract, isExtracting }: ChatSimulatorProps) {
         {isExtracting ? (
           <>
             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            Extracting...
+            <span className="animate-pulse">{extractionStatus}</span>
           </>
         ) : (
           'Extract Order with Claude'

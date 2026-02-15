@@ -54,7 +54,10 @@ export function OrderDisplay({ order }: OrderDisplayProps) {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] p-6 w-full max-w-[400px] min-h-[700px]">
+    <div 
+      key={order.id} // Key change: Forces component re-mount to trigger animation
+      className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] p-6 w-full max-w-[400px] min-h-[700px] animate-in slide-in-from-right-8 fade-in duration-700"
+    >
       <h2 className="text-xl font-semibold text-gray-800 mb-6">Extracted Order</h2>
       
       <div className="border-2 border-[#00a884] rounded-lg p-6 space-y-6 bg-white shadow-sm relative overflow-hidden">
