@@ -18,12 +18,85 @@ export function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(false);
 
+  function getLast7DaysData(orders: any[]) {
+    const today = new Date();
+    const data = [];
+    
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      
+      const dayOrders = orders.filter(o => {
+        const orderDate = new Date(o.created_at);
+        return orderDate.toDateString() === date.toDateString();
+      });
+      
+      data.push({
+        date: date.toLocaleDateString('en-IN', { weekday: 'short' }),
+        revenue: dayOrders.reduce((sum, o) => sum + (o.total || 0), 0)
+      });
+    }
+    
+    return data;
+  }
+
+  function createRevenueChart(orders: any[]) {
+    const canvas = document.getElementById('revenueChart') as HTMLCanvasElement;
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    const last7Days = getLast7DaysData(orders);
+    
+    // Simple bar chart
+    const maxRevenue = Math.max(...last7Days.map(d => d.revenue));
+    const chartWidth = canvas.width;
+    const chartHeight = canvas.height;
+    const barWidth = chartWidth / 7;
+    
+    ctx.clearRect(0, 0, chartWidth, chartHeight);
+    
+    last7Days.forEach((day, index) => {
+      const barHeight = maxRevenue > 0 ? (day.revenue / maxRevenue) * chartHeight * 0.8 : 0;
+      const x = index * barWidth + 10;
+      const y = chartHeight - barHeight;
+      
+      // Draw bar
+      ctx.fillStyle = '#00a884';
+      ctx.fillRect(x, y, barWidth - 20, barHeight);
+      
+      // Draw value
+      ctx.fillStyle = '#333';
+      ctx.font = '10px Arial';
+      ctx.fillText(`₹${(day.revenue/1000).toFixed(0)}k`, x, y - 5);
+
+      // Draw label (optional enhancement)
+      ctx.fillStyle = '#9ca3af';
+      ctx.fillText(day.date, x, chartHeight - 5);
+    });
+  }
+
   const fetchStats = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/stats');
-      const data = await res.json();
-      setStats(data);
+      // Fetch stats and orders in parallel to get full data for the chart
+      const [statsRes, ordersRes] = await Promise.all([
+        fetch('http://localhost:5000/api/stats'),
+        fetch('http://localhost:5000/api/orders')
+      ]);
+
+      const statsData = await statsRes.json();
+      const ordersData = await ordersRes.json();
+      
+      setStats(statsData);
+      
+      // Update chart with full order history
+      if (ordersData.orders) {
+        // Use requestAnimationFrame to ensure canvas is ready
+        requestAnimationFrame(() => createRevenueChart(ordersData.orders));
+      }
+
     } catch (err) {
       console.error("Failed to fetch stats", err);
     } finally {
@@ -66,6 +139,14 @@ export function Dashboard() {
              {(stats?.total_revenue || 0).toLocaleString('en-IN', { notation: "compact", maximumFractionDigits: 1 })}
           </div>
           <div className="text-xs text-gray-600 font-medium">Revenue</div>
+        </div>
+      </div>
+
+      {/* Analytics Section - New */}
+      <div className="mb-8 analytics-section">
+        <h3 className="font-semibold text-gray-800 mb-4 text-sm uppercase tracking-wide">7-Day Revenue Trend</h3>
+        <div className="bg-gray-50 rounded-lg border border-gray-100 p-2">
+           <canvas id="revenueChart" width="400" height="150" className="w-full"></canvas>
         </div>
       </div>
 
