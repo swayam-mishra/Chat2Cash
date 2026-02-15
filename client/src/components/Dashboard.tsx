@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, TrendingUp, AlertCircle } from 'lucide-react';
+import { RefreshCw, TrendingUp, AlertCircle, FileSpreadsheet } from 'lucide-react';
 
 interface Stats {
   total_orders: number;
@@ -17,6 +17,7 @@ interface Stats {
 export function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(false);
+  const [allOrders, setAllOrders] = useState<any[]>([]);
 
   function getLast7DaysData(orders: any[]) {
     const today = new Date();
@@ -77,6 +78,48 @@ export function Dashboard() {
     });
   }
 
+  function convertToCSV(orders: any[]) {
+    // CSV Header
+    const headers = ['Date', 'Customer', 'Items', 'Total', 'Status'];
+    
+    // Map orders to rows
+    const rows = orders.map(order => {
+      // Handle potential special characters in strings by wrapping in quotes
+      const date = new Date(order.created_at).toLocaleDateString('en-IN');
+      const customer = `"${(order.customer_name || '').replace(/"/g, '""')}"`;
+      
+      const itemsString = order.items
+        ? order.items.map((i: any) => `${i.quantity}x ${i.product_name || i.product || 'Item'}`).join('; ')
+        : '';
+      const items = `"${itemsString.replace(/"/g, '""')}"`;
+      
+      const total = order.total || 0;
+      const status = order.status || 'Completed';
+
+      return [date, customer, items, total, status].join(',');
+    });
+
+    return [headers.join(','), ...rows].join('\n');
+  }
+
+  function downloadCSV(csv: string, filename: string) {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function exportToExcel() {
+    if (allOrders.length === 0) return;
+    const csv = convertToCSV(allOrders);
+    const filename = `chat2cash-orders-${new Date().toISOString().split('T')[0]}.csv`;
+    downloadCSV(csv, filename);
+  }
+
   const fetchStats = async () => {
     setLoading(true);
     try {
@@ -91,8 +134,9 @@ export function Dashboard() {
       
       setStats(statsData);
       
-      // Update chart with full order history
+      // Update chart with full order history and save for export
       if (ordersData.orders) {
+        setAllOrders(ordersData.orders);
         // Use requestAnimationFrame to ensure canvas is ready
         requestAnimationFrame(() => createRevenueChart(ordersData.orders));
       }
@@ -112,9 +156,18 @@ export function Dashboard() {
     <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] p-6 w-full max-w-[450px] min-h-[700px] flex flex-col">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-semibold text-gray-800">Orders Dashboard</h2>
-        <button onClick={fetchStats} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-          <RefreshCw className={`w-4 h-4 text-gray-500 ${loading ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={exportToExcel} 
+            className="p-2 text-gray-500 hover:text-[#00a884] hover:bg-green-50 rounded-full transition-colors"
+            title="Export to Excel"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+          </button>
+          <button onClick={fetchStats} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+            <RefreshCw className={`w-4 h-4 text-gray-500 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
       
       {/* Stats grid */}
