@@ -1,0 +1,29 @@
+15/02/26, 09:15 - Sneha Patel: Good morning
+15/02/26, 09:15 - Sneha Patel: Need some items for shop
+15/02/26, 09:17 - You: Yes tell me
+15/02/26, 09:18 - Sneha Patel: Cotton sarees - 20 pieces mixed colors
+15/02/26, 09:19 - Sneha Patel: Silk sarees - 10 pieces
+15/02/26, 09:19 - Sneha Patel: Kurtis - 30 pieces different designs
+15/02/26, 09:20 - You: Ok big order
+15/02/26, 09:21 - You: Cotton saree 950
+15/02/26, 09:21 - You: Silk saree 2200
+15/02/26, 09:21 - You: Kurti 475
+15/02/26, 09:23 - Sneha Patel: Total kitna ho raha?
+15/02/26, 09:24 - You: Wait calculating
+15/02/26, 09:25 - You: Cotton 20x950 = 19000
+15/02/26, 09:25 - You: Silk 10x2200 = 22000
+15/02/26, 09:26 - You: Kurti 30x475 = 14250
+15/02/26, 09:26 - You: Total 55250
+15/02/26, 09:28 - Sneha Patel: Can you do 52000?
+15/02/26, 09:28 - Sneha Patel: Bulk order hai na
+15/02/26, 09:30 - You: Hmm
+15/02/26, 09:30 - You: 53000 final
+15/02/26, 09:31 - Sneha Patel: Ok done 53000
+15/02/26, 09:31 - Sneha Patel: When can you deliver?
+15/02/26, 09:32 - You: 3-4 days
+15/02/26, 09:32 - You: Need to arrange from supplier
+15/02/26, 09:33 - Sneha Patel: Monday delivery ok?
+15/02/26, 09:34 - You: Yes Monday confirmed
+15/02/26, 09:34 - Sneha Patel: Payment half now half on delivery
+15/02/26, 09:35 - You: Ok
+15/02/26, 09:35 - You: Send 26500 advance

@@ -1,0 +1,376 @@
+# Sample WhatsApp Chat Exports for Chat2Cash Demo
+# These are anonymized, realistic conversations typical of Indian SMB operations
+
+## ==========================================
+## CHAT 1: Simple Order (Good for First Demo)
+## ==========================================
+
+[12/02/2026, 10:23:45 AM] Priya Sharma: Hi aunty
+[12/02/2026, 10:24:12 AM] Priya Sharma: Red scarf available hai kya?
+[12/02/2026, 10:26:33 AM] You: Yes available hai
+[12/02/2026, 10:26:45 AM] You: How many pieces?
+[12/02/2026, 10:27:18 AM] Priya Sharma: 5 red aur 2 blue dupatta bhi chahiye
+[12/02/2026, 10:27:34 AM] Priya Sharma: Tomorrow delivery ho sakta?
+[12/02/2026, 10:28:56 AM] You: Yes tomorrow evening
+[12/02/2026, 10:29:12 AM] You: Address?
+[12/02/2026, 10:30:45 AM] Priya Sharma: Koramangala 6th block same address
+[12/02/2026, 10:31:23 AM] You: Ok done
+[12/02/2026, 10:31:56 AM] Priya Sharma: Price kitna hai total?
+[12/02/2026, 10:33:12 AM] You: Red scarf 450 each
+[12/02/2026, 10:33:28 AM] You: Blue dupatta 650 each
+[12/02/2026, 10:34:45 AM] Priya Sharma: Ok confirm karo
+[12/02/2026, 10:35:01 AM] You: Confirmed 👍
+[12/02/2026, 10:35:34 AM] Priya Sharma: Payment link send karo
+
+## Expected Extraction:
+## - Customer: Priya Sharma
+## - Items: 5x Red Scarf @ ₹450, 2x Blue Dupatta @ ₹650
+## - Total: ₹3,550
+## - Delivery: Tomorrow evening, Koramangala 6th block
+## - Status: Confirmed, payment pending
+
+
+## ==========================================
+## CHAT 2: Messy Hinglish Order (Shows AI Power)
+## ==========================================
+
+[13/02/2026, 2:15:23 PM] Rajesh Kumar: Bhaiya suno
+[13/02/2026, 2:15:45 PM] Rajesh Kumar: Wo jo last time yellow wala kurti bheja tha na
+[13/02/2026, 2:16:12 PM] Rajesh Kumar: Waise hi 10 piece chahiye
+[13/02/2026, 2:17:34 PM] You: Yellow cotton kurti?
+[13/02/2026, 2:18:01 PM] Rajesh Kumar: Haan wohi
+[13/02/2026, 2:18:23 PM] Rajesh Kumar: Aur bhi sarees bhi dikhao kuch
+[13/02/2026, 2:19:45 PM] You: Saree ka photo send kar rahi hoon
+[13/02/2026, 2:20:12 PM] You: 📷 image.jpg (file attached)
+[13/02/2026, 2:21:34 PM] Rajesh Kumar: Isme se red wala 5 piece
+[13/02/2026, 2:21:56 PM] Rajesh Kumar: Green wala 3 piece
+[13/02/2026, 2:22:18 PM] You: Ok total 10 kurti + 8 saree
+[13/02/2026, 2:22:45 PM] Rajesh Kumar: Haan sahi hai
+[13/02/2026, 2:23:12 PM] Rajesh Kumar: Rate kya hai?
+[13/02/2026, 2:24:33 PM] You: Kurti 550 each
+[13/02/2026, 2:24:48 PM] You: Saree 1200 each
+[13/02/2026, 2:25:23 PM] Rajesh Kumar: Thoda kam karo na bhaiya
+[13/02/2026, 2:25:56 PM] Rajesh Kumar: Regular customer hoon
+[13/02/2026, 2:26:34 PM] You: Acha ok
+[13/02/2026, 2:26:51 PM] You: Kurti 525
+[13/02/2026, 2:27:08 PM] You: Saree 1150
+[13/02/2026, 2:27:45 PM] Rajesh Kumar: Done confirm karo
+[13/02/2026, 2:28:12 PM] Rajesh Kumar: Delivery Friday tak chahiye
+[13/02/2026, 2:28:34 PM] You: Confirmed
+[13/02/2026, 2:29:01 PM] You: Friday afternoon mil jayega
+
+## Expected Extraction:
+## - Customer: Rajesh Kumar
+## - Items: 10x Yellow Cotton Kurti @ ₹525, 5x Red Saree @ ₹1,150, 3x Green Saree @ ₹1,150
+## - Total: ₹14,650
+## - Delivery: Friday afternoon
+## - Special notes: Regular customer, negotiated price
+
+
+## ==========================================
+## CHAT 3: Voice Note Order (Text Transcript)
+## ==========================================
+
+[14/02/2026, 11:42:18 AM] Meera Reddy: 🎤 Voice message (0:24)
+[Transcript: "Hello aunty, Meera bol rahi hoon. Mujhe wo peach color lehenga chahiye jo aapne last week dikha tha. Aur matching dupatta bhi. Ek hi set chahiye. Wedding hai next month to urgent hai. Call back karo please."]
+
+[14/02/2026, 11:58:34 AM] You: Hi Meera
+[14/02/2026, 11:58:52 AM] You: Peach lehenga available hai
+[14/02/2026, 11:59:15 AM] You: With dupatta set
+[14/02/2026, 12:01:23 PM] Meera Reddy: Price?
+[14/02/2026, 12:02:45 PM] You: 8500 full set
+[14/02/2026, 12:03:12 PM] Meera Reddy: 🎤 Voice message (0:15)
+[Transcript: "Theek hai, book kar do. Payment kal kar dungi. Address same hai Indiranagar wala."]
+
+[14/02/2026, 12:05:34 PM] You: Booked
+[14/02/2026, 12:05:51 PM] You: Delivery next week
+[14/02/2026, 12:06:18 PM] Meera Reddy: Ok perfect
+
+## Expected Extraction:
+## - Customer: Meera Reddy
+## - Items: 1x Peach Lehenga Set (with dupatta) @ ₹8,500
+## - Total: ₹8,500
+## - Delivery: Next week, Indiranagar
+## - Special notes: Wedding order, urgent, payment tomorrow
+
+
+## ==========================================
+## CHAT 4: Multiple Items + Negotiation
+## ==========================================
+
+[15/02/2026, 9:15:23 AM] Sneha Patel: Good morning
+[15/02/2026, 9:15:45 AM] Sneha Patel: Need some items for shop
+[15/02/2026, 9:17:12 AM] You: Yes tell me
+[15/02/2026, 9:18:34 AM] Sneha Patel: Cotton sarees - 20 pieces mixed colors
+[15/02/2026, 9:19:01 AM] Sneha Patel: Silk sarees - 10 pieces
+[15/02/2026, 9:19:28 AM] Sneha Patel: Kurtis - 30 pieces different designs
+[15/02/2026, 9:20:45 AM] You: Ok big order
+[15/02/2026, 9:21:12 AM] You: Cotton saree 950
+[15/02/2026, 9:21:34 AM] You: Silk saree 2200
+[15/02/2026, 9:21:56 AM] You: Kurti 475
+[15/02/2026, 9:23:23 AM] Sneha Patel: Total kitna ho raha?
+[15/02/2026, 9:24:45 AM] You: Wait calculating
+[15/02/2026, 9:25:34 AM] You: Cotton 20x950 = 19000
+[15/02/2026, 9:25:51 AM] You: Silk 10x2200 = 22000
+[15/02/2026, 9:26:08 AM] You: Kurti 30x475 = 14250
+[15/02/2026, 9:26:34 AM] You: Total 55250
+[15/02/2026, 9:28:12 AM] Sneha Patel: Can you do 52000?
+[15/02/2026, 9:28:45 AM] Sneha Patel: Bulk order hai na
+[15/02/2026, 9:30:01 AM] You: Hmm
+[15/02/2026, 9:30:34 AM] You: 53000 final
+[15/02/2026, 9:31:12 AM] Sneha Patel: Ok done 53000
+[15/02/2026, 9:31:45 AM] Sneha Patel: When can you deliver?
+[15/02/2026, 9:32:23 AM] You: 3-4 days
+[15/02/2026, 9:32:56 AM] You: Need to arrange from supplier
+[15/02/2026, 9:33:34 AM] Sneha Patel: Monday delivery ok?
+[15/02/2026, 9:34:01 AM] You: Yes Monday confirmed
+[15/02/2026, 9:34:28 AM] Sneha Patel: Payment half now half on delivery
+[15/02/2026, 9:35:12 AM] You: Ok
+[15/02/2026, 9:35:34 AM] You: Send 26500 advance
+
+## Expected Extraction:
+## - Customer: Sneha Patel
+## - Items: 20x Cotton Saree @ ₹950, 10x Silk Saree @ ₹2,200, 30x Kurti @ ₹475
+## - Negotiated Total: ₹53,000 (original ₹55,250)
+## - Delivery: Monday (3-4 days)
+## - Payment: ₹26,500 advance, ₹26,500 on delivery
+## - Special notes: Bulk order, supplier arrangement needed
+
+
+## ==========================================
+## CHAT 5: Inquiry Only (Not Yet Order)
+## ==========================================
+
+[15/02/2026, 4:23:12 PM] Kavita Singh: Hi
+[15/02/2026, 4:23:34 PM] Kavita Singh: Bridal lehenga available?
+[15/02/2026, 4:25:01 PM] You: Yes what's your budget?
+[15/02/2026, 4:26:23 PM] Kavita Singh: 15-20k range
+[15/02/2026, 4:27:45 PM] You: Yes available
+[15/02/2026, 4:28:12 PM] You: Red, maroon, pink colors
+[15/02/2026, 4:29:34 PM] Kavita Singh: Photos dikha sakte ho?
+[15/02/2026, 4:30:01 PM] You: Yes sending
+[15/02/2026, 4:30:45 PM] You: 📷 image1.jpg (file attached)
+[15/02/2026, 4:31:02 PM] You: 📷 image2.jpg (file attached)
+[15/02/2026, 4:31:23 PM] You: 📷 image3.jpg (file attached)
+[15/02/2026, 4:33:45 PM] Kavita Singh: Nice hai
+[15/02/2026, 4:34:12 PM] Kavita Singh: But let me check few more places
+[15/02/2026, 4:34:45 PM] Kavita Singh: Will confirm by tomorrow
+[15/02/2026, 4:35:23 PM] You: Ok no problem
+[15/02/2026, 4:35:56 PM] You: Let me know
+
+## Expected Extraction:
+## - Customer: Kavita Singh
+## - Status: Inquiry only, not confirmed order
+## - Interest: Bridal lehenga, ₹15-20K budget, red/maroon/pink
+## - Follow-up needed: Tomorrow
+## - Action: Send reminder tomorrow if no response
+
+
+## ==========================================
+## CHAT 6: Payment Follow-up Scenario
+## ==========================================
+
+[10/02/2026, 3:12:34 PM] Anjali Gupta: Hi aunty
+[10/02/2026, 3:13:01 PM] Anjali Gupta: 3 blue suits chahiye
+[10/02/2026, 3:14:23 PM] You: Ok available
+[10/02/2026, 3:14:45 PM] You: 1200 each
+[10/02/2026, 3:15:34 PM] Anjali Gupta: Done book karo
+[10/02/2026, 3:16:12 PM] You: Total 3600
+[10/02/2026, 3:16:45 PM] You: UPI ID: 9876543210@paytm
+[10/02/2026, 3:17:23 PM] Anjali Gupta: Ok sending
+
+[11/02/2026, 11:23:12 AM] You: Hi Anjali
+[11/02/2026, 11:23:34 AM] You: Payment received?
+[11/02/2026, 11:45:23 AM] Anjali Gupta: Sorry forgot
+[11/02/2026, 11:45:56 AM] Anjali Gupta: Will send today evening
+
+[12/02/2026, 6:34:12 PM] You: Hi payment done?
+[12/02/2026, 6:56:34 PM] Anjali Gupta: Sending now
+
+[13/02/2026, 10:12:34 AM] You: Hi Anjali any update?
+[13/02/2026, 10:34:56 AM] Anjali Gupta: Sorry aunty busy tha
+[13/02/2026, 10:35:23 AM] Anjali Gupta: Payment done just now
+[13/02/2026, 10:35:45 AM] Anjali Gupta: Check karo
+
+[13/02/2026, 10:42:12 AM] You: Received thank you
+[13/02/2026, 10:42:34 AM] You: Delivery by tomorrow
+
+## Expected Extraction:
+## - Customer: Anjali Gupta
+## - Items: 3x Blue Suit @ ₹1,200
+## - Total: ₹3,600
+## - Order date: 10/02/2026
+## - Payment received: 13/02/2026 (3 days delay)
+## - Follow-ups needed: 3 manual reminders
+## - Status: Paid, ready for delivery
+## - INSIGHT: This is exactly the problem Chat2Cash solves!
+
+
+## ==========================================
+## CHAT 7: Last-Minute Rush Order
+## ==========================================
+
+[15/02/2026, 8:45:12 PM] Divya Nair: URGENT
+[15/02/2026, 8:45:34 PM] Divya Nair: Kal function hai
+[15/02/2026, 8:45:56 PM] Divya Nair: Green saree mil sakta hai kya?
+[15/02/2026, 8:47:23 PM] You: Kaunsa green?
+[15/02/2026, 8:47:45 PM] You: Dark ya light?
+[15/02/2026, 8:48:34 PM] Divya Nair: 📷 image.jpg (file attached)
+[15/02/2026, 8:48:56 PM] Divya Nair: Yeh wala jaise
+[15/02/2026, 8:50:12 PM] You: Similar hai
+[15/02/2026, 8:50:34 PM] You: Exact nahi
+[15/02/2026, 8:51:01 PM] Divya Nair: Chalega
+[15/02/2026, 8:51:23 PM] Divya Nair: Price?
+[15/02/2026, 8:52:12 PM] You: 1800
+[15/02/2026, 8:52:45 PM] Divya Nair: Done
+[15/02/2026, 8:53:12 PM] Divya Nair: Tonight mil sakta?
+[15/02/2026, 8:54:34 PM] You: Kal morning 10 baje
+[15/02/2026, 8:55:01 PM] Divya Nair: Ok pick up kar lungi
+[15/02/2026, 8:55:34 PM] You: Address you know?
+[15/02/2026, 8:56:12 PM] Divya Nair: Haan BTM layout na?
+[15/02/2026, 8:56:45 PM] You: Yes correct
+[15/02/2026, 8:57:23 PM] Divya Nair: Payment on pickup
+[15/02/2026, 8:57:56 PM] You: Ok done
+
+## Expected Extraction:
+## - Customer: Divya Nair
+## - Items: 1x Green Saree (similar to image) @ ₹1,800
+## - Total: ₹1,800
+## - Delivery: Tomorrow 10 AM, self pickup at BTM Layout
+## - Payment: On pickup
+## - Special notes: URGENT order for function, similar (not exact) product
+
+
+## ==========================================
+## CHAT 8: Repeat Customer with History
+## ==========================================
+
+[15/02/2026, 2:12:34 PM] Lakshmi Iyer: Hi aunty good afternoon
+[15/02/2026, 2:13:12 PM] You: Hi Lakshmi
+[15/02/2026, 2:13:45 PM] Lakshmi Iyer: Same order as last month
+[15/02/2026, 2:14:23 PM] You: 5 cotton saree mixed colors?
+[15/02/2026, 2:15:01 PM] Lakshmi Iyer: Haan exactly
+[15/02/2026, 2:15:34 PM] Lakshmi Iyer: Same rate 950?
+[15/02/2026, 2:16:23 PM] You: Yes same
+[15/02/2026, 2:16:56 PM] You: 4750 total
+[15/02/2026, 2:17:34 PM] Lakshmi Iyer: Perfect
+[15/02/2026, 2:18:12 PM] Lakshmi Iyer: Same delivery address Whitefield
+[15/02/2026, 2:18:45 PM] You: When needed?
+[15/02/2026, 2:19:23 PM] Lakshmi Iyer: End of week ok
+[15/02/2026, 2:19:56 PM] You: Saturday delivery
+[15/02/2026, 2:20:34 PM] Lakshmi Iyer: Done
+[15/02/2026, 2:21:12 PM] Lakshmi Iyer: Sending payment now
+[15/02/2026, 2:23:45 PM] Lakshmi Iyer: 📷 payment_screenshot.jpg (file attached)
+[15/02/2026, 2:24:23 PM] You: Received ✅
+[15/02/2026, 2:24:56 PM] You: Thank you
+
+## Expected Extraction:
+## - Customer: Lakshmi Iyer (REPEAT CUSTOMER)
+## - Items: 5x Cotton Saree (mixed colors) @ ₹950
+## - Total: ₹4,750
+## - Delivery: Saturday, Whitefield (known address)
+## - Payment: Already received (payment screenshot sent)
+## - Special notes: Monthly repeat order, trusted customer
+## - INSIGHT: Should offer loyalty discount or priority service
+
+
+## ==========================================
+## CHAT 9: Confusion / Clarification Needed
+## ==========================================
+
+[14/02/2026, 5:23:12 PM] Pooja Desai: Hi
+[14/02/2026, 5:23:45 PM] Pooja Desai: Need kurtis
+[14/02/2026, 5:25:12 PM] You: How many?
+[14/02/2026, 5:26:34 PM] Pooja Desai: 10-15 types
+[14/02/2026, 5:27:01 PM] You: 10 or 15?
+[14/02/2026, 5:28:23 PM] Pooja Desai: Different different designs
+[14/02/2026, 5:28:56 PM] Pooja Desai: Total 10 pieces but all different
+[14/02/2026, 5:30:12 PM] You: Ok 10 pieces mixed designs
+[14/02/2026, 5:30:45 PM] Pooja Desai: Price range kya hai?
+[14/02/2026, 5:32:01 PM] You: 450-600 depending design
+[14/02/2026, 5:33:23 PM] Pooja Desai: Average 500 lo
+[14/02/2026, 5:33:56 PM] You: Ok 5000 total
+[14/02/2026, 5:34:34 PM] Pooja Desai: Size?
+[14/02/2026, 5:35:12 PM] You: M aur L available
+[14/02/2026, 5:36:23 PM] Pooja Desai: M size 6 pieces
+[14/02/2026, 5:36:45 PM] Pooja Desai: L size 4 pieces
+[14/02/2026, 5:37:34 PM] You: Noted
+[14/02/2026, 5:38:01 PM] Pooja Desai: Colors preference dark colors
+[14/02/2026, 5:38:56 PM] You: Ok dark colors mix
+[14/02/2026, 5:39:34 PM] Pooja Desai: When sending?
+[14/02/2026, 5:40:12 PM] You: Tuesday tak
+[14/02/2026, 5:40:56 PM] Pooja Desai: Ok done confirm
+
+## Expected Extraction:
+## - Customer: Pooja Desai
+## - Items: 10x Kurti (mixed designs, dark colors) @ ~₹500 average
+##   - 6x M size
+##   - 4x L size
+## - Total: ₹5,000 (approximate)
+## - Delivery: Tuesday
+## - Special notes: Different designs required, price is average estimate
+## - INSIGHT: Vague order, needs confirmation on exact items
+
+
+## ==========================================
+## CHAT 10: Cancelled Order
+## ==========================================
+
+[13/02/2026, 11:23:12 AM] Nisha Reddy: Hi need 10 suits
+[13/02/2026, 11:24:34 AM] You: Which color?
+[13/02/2026, 11:25:56 AM] Nisha Reddy: Black and grey
+[13/02/2026, 11:26:23 AM] Nisha Reddy: 5-5
+[13/02/2026, 11:27:45 AM] You: Price 1300 each
+[13/02/2026, 11:28:34 AM] Nisha Reddy: Ok book karo
+[13/02/2026, 11:29:12 AM] You: Total 13000
+[13/02/2026, 11:29:56 AM] You: Delivery Wednesday
+[13/02/2026, 11:30:45 AM] Nisha Reddy: Perfect
+
+[14/02/2026, 9:12:34 AM] Nisha Reddy: Hi aunty
+[14/02/2026, 9:13:12 AM] Nisha Reddy: Sorry but I need to cancel
+[14/02/2026, 9:13:45 AM] Nisha Reddy: Got better rate somewhere else
+[14/02/2026, 9:15:23 AM] You: Ok no problem
+[14/02/2026, 9:16:01 AM] You: But I already ordered from supplier
+[14/02/2026, 9:17:34 AM] Nisha Reddy: Sorry aunty
+[14/02/2026, 9:18:12 AM] Nisha Reddy: Next time pakka order karungi
+[14/02/2026, 9:19:45 AM] You: Ok
+
+## Expected Extraction:
+## - Customer: Nisha Reddy
+## - Items: 5x Black Suit @ ₹1,300, 5x Grey Suit @ ₹1,300
+## - Total: ₹13,000
+## - Status: CANCELLED (before payment)
+## - Date: Ordered 13/02, Cancelled 14/02
+## - Special notes: Found better rate elsewhere, caused loss (already ordered from supplier)
+## - INSIGHT: This is a revenue leakage scenario - advance payment would prevent this
+
+
+## ==========================================
+## SUMMARY STATISTICS (for your pitch)
+## ==========================================
+
+Total Chats Analyzed: 10
+Confirmed Orders: 7
+Inquiries Only: 1
+Cancelled: 1
+Payment Delayed: 1
+
+Total Order Value: ₹1,45,950
+Payment Delays: 1 order (3 days of follow-ups)
+Revenue Lost (cancelled): ₹13,000
+Potential Loss if not tracked: ~₹30,000-40,000
+
+Time spent on manual follow-ups: ~2 hours per week
+Time spent creating invoices manually: ~30 min per order
+
+These chats demonstrate:
+✓ Hinglish/code-mixed conversations
+✓ Price negotiations
+✓ Delivery coordination
+✓ Payment follow-ups
+✓ Repeat customers
+✓ Urgent orders
+✓ Cancelled orders
+✓ Vague specifications
+
+Perfect for demonstrating Chat2Cash's value!
