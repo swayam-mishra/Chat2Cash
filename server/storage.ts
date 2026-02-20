@@ -1,4 +1,7 @@
-import type { ExtractedOrder, ExtractedChatOrder, Invoice } from "@shared/schema";
+import { ExtractedOrder, ExtractedChatOrder, Invoice } from "@shared/schema";
+import { db } from "./db";
+import { extractedOrdersTable, chatOrdersTable } from "@shared/schema";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
   getOrders(): Promise<ExtractedOrder[]>;
@@ -12,70 +15,57 @@ export interface IStorage {
   attachInvoice(orderId: string, invoice: Invoice): Promise<(ExtractedChatOrder & { invoice: Invoice }) | undefined>;
 }
 
-export class MemStorage implements IStorage {
-  private orders: ExtractedOrder[];
-  private chatOrders: ExtractedChatOrder[];
-
-  constructor() {
-    this.orders = [];
-    this.chatOrders = [];
-  }
-
+export class DatabaseStorage implements IStorage {
   async getOrders(): Promise<ExtractedOrder[]> {
-    return [...this.orders].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+    return await db.select().from(extractedOrdersTable).orderBy(desc(extractedOrdersTable.createdAt));
   }
 
   async getOrder(id: string): Promise<ExtractedOrder | undefined> {
-    return this.orders.find((o) => o.id === id);
+    const [order] = await db.select().from(extractedOrdersTable).where(eq(extractedOrdersTable.id, id));
+    return order as ExtractedOrder | undefined;
   }
 
   async addOrder(order: ExtractedOrder): Promise<ExtractedOrder> {
-    this.orders.push(order);
-    return order;
+    const [newOrder] = await db.insert(extractedOrdersTable).values(order).returning();
+    return newOrder as ExtractedOrder;
   }
 
-  async updateOrderStatus(
-    id: string,
-    status: ExtractedOrder["status"]
-  ): Promise<ExtractedOrder | undefined> {
-    const order = this.orders.find((o) => o.id === id);
-    if (order) {
-      order.status = status;
-    }
-    return order;
+  async updateOrderStatus(id: string, status: ExtractedOrder["status"]): Promise<ExtractedOrder | undefined> {
+    const [updated] = await db
+      .update(extractedOrdersTable)
+      .set({ status })
+      .where(eq(extractedOrdersTable.id, id))
+      .returning();
+    return updated as ExtractedOrder | undefined;
   }
 
   async deleteOrder(id: string): Promise<boolean> {
-    const idx = this.orders.findIndex((o) => o.id === id);
-    if (idx === -1) return false;
-    this.orders.splice(idx, 1);
-    return true;
+    const [deleted] = await db.delete(extractedOrdersTable).where(eq(extractedOrdersTable.id, id)).returning();
+    return !!deleted;
   }
 
   async getChatOrders(): Promise<ExtractedChatOrder[]> {
-    return [...this.chatOrders].sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
+    return await db.select().from(chatOrdersTable).orderBy(desc(chatOrdersTable.created_at));
   }
 
   async getChatOrder(id: string): Promise<ExtractedChatOrder | undefined> {
-    return this.chatOrders.find((o) => o.id === id);
+    const [order] = await db.select().from(chatOrdersTable).where(eq(chatOrdersTable.id, id));
+    return order as ExtractedChatOrder | undefined;
   }
 
   async addChatOrder(order: ExtractedChatOrder): Promise<ExtractedChatOrder> {
-    this.chatOrders.push(order);
-    return order;
+    const [newOrder] = await db.insert(chatOrdersTable).values(order).returning();
+    return newOrder as ExtractedChatOrder;
   }
 
   async attachInvoice(orderId: string, invoice: Invoice): Promise<(ExtractedChatOrder & { invoice: Invoice }) | undefined> {
-    const order = this.chatOrders.find((o) => o.id === orderId);
-    if (!order) return undefined;
-    const orderWithInvoice = order as ExtractedChatOrder & { invoice: Invoice };
-    orderWithInvoice.invoice = invoice;
-    return orderWithInvoice;
+    const [updated] = await db
+      .update(chatOrdersTable)
+      .set({ invoice })
+      .where(eq(chatOrdersTable.id, orderId))
+      .returning();
+    return updated as (ExtractedChatOrder & { invoice: Invoice }) | undefined;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

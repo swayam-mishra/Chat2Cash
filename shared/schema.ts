@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { pgTable, text, real, jsonb } from "drizzle-orm/pg-core";
 
 export const orderItemSchema = z.object({
   name: z.string(),
@@ -86,3 +87,32 @@ export type ExtractedChatOrderItem = z.infer<typeof extractedChatOrderItemSchema
 export type ExtractedChatOrder = z.infer<typeof extractedChatOrderSchema>;
 export type InsertUser = { username: string; password: string };
 export type User = { id: string; username: string; password: string };
+export const extractedOrdersTable = pgTable("extracted_orders", {
+  id: text("id").primaryKey(),
+  customerName: text("customer_name"),
+  customerPhone: text("customer_phone"),
+  items: jsonb("items").$type<OrderItem[]>().notNull(),
+  totalAmount: real("total_amount"),
+  currency: text("currency").default("INR"),
+  notes: text("notes"),
+  rawMessage: text("raw_message").notNull(),
+  confidence: real("confidence").notNull(),
+  status: text("status").default("pending").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+// Define the Chat Orders table
+export const chatOrdersTable = pgTable("chat_orders", {
+  id: text("id").primaryKey(),
+  customer_name: text("customer_name"),
+  items: jsonb("items").$type<ExtractedChatOrderItem[]>().notNull(),
+  delivery_address: text("delivery_address"),
+  delivery_date: text("delivery_date"),
+  special_instructions: text("special_instructions"),
+  total: real("total"),
+  confidence: text("confidence").notNull(),
+  status: text("status").default("pending").notNull(),
+  created_at: text("created_at").notNull(),
+  raw_messages: jsonb("raw_messages").$type<ChatMessage[]>().notNull(),
+  invoice: jsonb("invoice").$type<Invoice>(),
+});
