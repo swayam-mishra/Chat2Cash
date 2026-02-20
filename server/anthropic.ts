@@ -97,7 +97,41 @@ Important rules:
 - Extract delivery addresses or special instructions as notes
 - If the message is not an order at all, still return a valid JSON with empty items array and low confidence
 
-Return ONLY valid JSON, no markdown, no explanation.`;
+Return ONLY valid JSON, no markdown, no explanation.
+
+<example>
+Input: "2 kilo aashirvaad aata, 3 darjan kele aur 1 packet amul milk bhijwa do. 300 Rs pay kar diya hai."
+Output:
+{
+  "customerName": null,
+  "customerPhone": null,
+  "items": [
+    { "name": "Aashirvaad Aata", "quantity": 2, "unit": "kg", "pricePerUnit": null, "totalPrice": null },
+    { "name": "Kele (Bananas)", "quantity": 3, "unit": "dozen", "pricePerUnit": null, "totalPrice": null },
+    { "name": "Amul Milk", "quantity": 1, "unit": "packet", "pricePerUnit": null, "totalPrice": null }
+  ],
+  "totalAmount": 300,
+  "currency": "INR",
+  "notes": "bhijwa do, payment of 300 Rs made",
+  "confidence": 0.95
+}
+</example>
+
+<example>
+Input: "Bhaiya 10 piece lucknowi kurti white wali chahiye wholesale me. Address: Aminabad market."
+Output:
+{
+  "customerName": null,
+  "customerPhone": null,
+  "items": [
+    { "name": "Lucknowi Kurti - White (Wholesale)", "quantity": 10, "unit": "pieces", "pricePerUnit": null, "totalPrice": null }
+  ],
+  "totalAmount": null,
+  "currency": "INR",
+  "notes": "Address: Aminabad market",
+  "confidence": 0.90
+}
+</example>`;
 
 export async function extractOrderFromMessage(
   rawMessage: string,
@@ -183,7 +217,85 @@ OUTPUT FORMAT — return ONLY this JSON structure, no markdown fences:
 CONFIDENCE GUIDE:
 - "high": Clear items, quantities, and (optionally) prices stated explicitly
 - "medium": Items identifiable but some ambiguity (vague references, missing details)
-- "low": Very unclear, mostly chit-chat, or heavily relies on context not in the conversation`;
+- "low": Very unclear, mostly chit-chat, or heavily relies on context not in the conversation
+
+<example>
+Input Conversation:
+Priya Sharma: Bhaiya 2 banarasi saree red wali dena. Kal tak B-42 Lajpat nagar bhej do.
+Priya Sharma: Aur 1 matching blouse piece bhi rakh lena. Kitna hua total?
+Shopkeeper: 8500 ki saree hai ek, blouse 750 ka.
+
+Output:
+{
+  "customer_name": "Priya Sharma",
+  "items": [
+    { "product_name": "Banarasi Saree - Red", "quantity": 2, "price": 8500 },
+    { "product_name": "Matching Blouse Piece", "quantity": 1, "price": 750 }
+  ],
+  "delivery_address": "B-42 Lajpat nagar",
+  "delivery_date": "kal tak",
+  "special_instructions": null,
+  "total": 17750,
+  "confidence": "high"
+}
+</example>
+
+<example>
+Input Conversation:
+Rajesh Gupta: 100 piece cotton kurti blue color ka kya rate lagega wholesale me?
+Vendor: 450 per piece padega sir
+Rajesh Gupta: 420 lagao toh 100 final karte hain. Friday delivery Surat, premium packing chahiye.
+Vendor: Thik hai sir done.
+
+Output:
+{
+  "customer_name": "Rajesh Gupta",
+  "items": [
+    { "product_name": "Cotton Kurti - Blue Color (Wholesale)", "quantity": 100, "price": 420 }
+  ],
+  "delivery_address": "Surat",
+  "delivery_date": "Friday",
+  "special_instructions": "premium packing chahiye",
+  "total": 42000,
+  "confidence": "high"
+}
+</example>
+
+<example>
+Input Conversation:
+Customer: Hello aunty, wo last time wala chanderi suit set bhej dijiye 3 piece.
+Customer: Payment google pay kar rahi hu.
+
+Output:
+{
+  "customer_name": "Customer",
+  "items": [
+    { "product_name": "Chanderi Suit Set (Same as last time)", "quantity": 3, "price": null }
+  ],
+  "delivery_address": null,
+  "delivery_date": null,
+  "special_instructions": "Payment google pay",
+  "total": null,
+  "confidence": "medium"
+}
+</example>
+
+<example>
+Input Conversation:
+Rahul: Hi, kal dukan khuli hai kya?
+Shop: Haan bhaiya, 10 baje aaiye.
+
+Output:
+{
+  "customer_name": "Rahul",
+  "items": [],
+  "delivery_address": null,
+  "delivery_date": null,
+  "special_instructions": null,
+  "total": null,
+  "confidence": "low"
+}
+</example>`;
 
 export async function extractOrderFromChat(
   messages: ChatMessage[],
