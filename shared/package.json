@@ -1,0 +1,9 @@
+{
+  "name": "@shared/schema",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "schema.ts",
+  "exports": {
+    ".": "./schema.ts"
+  }
+}

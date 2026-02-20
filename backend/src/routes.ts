@@ -3,7 +3,11 @@ import { createServer, type Server } from "http";
 import cors from "cors";
 import { storage } from "./storage";
 import { extractOrderFromMessage, extractOrderFromChat } from "./anthropic";
-import { extractOrderRequestSchema, extractOrderFromChatRequestSchema } from "@shared/schema";
+import { 
+  extractOrderRequestSchema, 
+  extractOrderFromChatRequestSchema,
+  updateChatOrderSchema // NEW IMPORT
+} from "@shared/schema";
 import type { Invoice, InvoiceItem } from "@shared/schema";
 import { z } from "zod";
 import { log } from "./index";
@@ -200,6 +204,26 @@ export async function registerRoutes(
       const msg = error.message || "Failed to generate invoice";
       log(`Invoice generation failed: ${msg}`, "routes");
       res.status(500).json({ message: msg });
+    }
+  });
+
+  // NEW: Route for editing the contents of an order
+  app.patch("/api/orders/:id/edit", async (req, res) => {
+    try {
+      const parsed = updateChatOrderSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0].message });
+      }
+
+      const updatedOrder = await storage.updateChatOrderDetails(req.params.id, parsed.data);
+      if (!updatedOrder) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      
+      log(`Order ${req.params.id} details manually updated by user`, "routes");
+      res.json(updatedOrder);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to update order details" });
     }
   });
 

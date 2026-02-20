@@ -13,6 +13,7 @@ export interface IStorage {
   getChatOrder(id: string): Promise<ExtractedChatOrder | undefined>;
   addChatOrder(order: ExtractedChatOrder): Promise<ExtractedChatOrder>;
   attachInvoice(orderId: string, invoice: Invoice): Promise<(ExtractedChatOrder & { invoice: Invoice }) | undefined>;
+  updateChatOrderDetails(id: string, updates: Partial<ExtractedChatOrder>): Promise<ExtractedChatOrder | undefined>; // NEW method
 }
 
 export class DatabaseStorage implements IStorage {
@@ -65,6 +66,17 @@ export class DatabaseStorage implements IStorage {
       .where(eq(chatOrdersTable.id, orderId))
       .returning();
     return updated as (ExtractedChatOrder & { invoice: Invoice }) | undefined;
+  }
+
+  // NEW: Update any detail of the chat order
+  async updateChatOrderDetails(id: string, updates: Partial<ExtractedChatOrder>): Promise<ExtractedChatOrder | undefined> {
+    const [updated] = await db
+      .update(chatOrdersTable)
+      .set(updates)
+      .where(eq(chatOrdersTable.id, id))
+      .returning();
+      
+    return updated as ExtractedChatOrder | undefined;
   }
 }
 

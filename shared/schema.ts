@@ -56,6 +56,16 @@ export const extractedChatOrderSchema = z.object({
   raw_messages: z.array(chatMessageSchema),
 });
 
+// NEW: Schema for validating edit requests
+export const updateChatOrderSchema = z.object({
+  customer_name: z.string().nullable().optional(),
+  items: z.array(extractedChatOrderItemSchema).optional(),
+  delivery_address: z.string().nullable().optional(),
+  delivery_date: z.string().nullable().optional(),
+  special_instructions: z.string().nullable().optional(),
+  total: z.number().nullable().optional(),
+});
+
 export const invoiceItemSchema = z.object({
   product_name: z.string(),
   quantity: z.number(),
@@ -85,8 +95,10 @@ export type ChatMessage = z.infer<typeof chatMessageSchema>;
 export type ExtractOrderFromChatRequest = z.infer<typeof extractOrderFromChatRequestSchema>;
 export type ExtractedChatOrderItem = z.infer<typeof extractedChatOrderItemSchema>;
 export type ExtractedChatOrder = z.infer<typeof extractedChatOrderSchema>;
+export type UpdateChatOrderRequest = z.infer<typeof updateChatOrderSchema>; // NEW Type
 export type InsertUser = { username: string; password: string };
 export type User = { id: string; username: string; password: string };
+
 export const extractedOrdersTable = pgTable("extracted_orders", {
   id: text("id").primaryKey(),
   customerName: text("customer_name"),
@@ -116,3 +128,6 @@ export const chatOrdersTable = pgTable("chat_orders", {
   raw_messages: jsonb("raw_messages").$type<ChatMessage[]>().notNull(),
   invoice: jsonb("invoice").$type<Invoice>(),
 });
+
+export const extractedOrdersTable = pgTable("extracted_orders", { /* ... */ });
+export const chatOrdersTable = pgTable("chat_orders", { /* ... */ });
