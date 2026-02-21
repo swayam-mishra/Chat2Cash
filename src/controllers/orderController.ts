@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { storage } from "../services/storageService";
 import { extractOrderFromMessage, extractOrderFromChat } from "../services/anthropicService";
 import * as orderService from "../services/orderService";
-import { extractOrderRequestSchema, extractOrderFromChatRequestSchema, updateChatOrderSchema } from "@shared/schema";
+import { extractOrderRequestSchema, extractOrderFromChatRequestSchema, updateChatOrderSchema } from "../schema";
 import { z } from "zod";
 
 export const getStats = async (_req: Request, res: Response) => {

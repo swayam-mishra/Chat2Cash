@@ -1,6 +1,6 @@
-import { ExtractedOrder, ExtractedChatOrder, Invoice } from "@shared/schema";
+import { ExtractedOrder, ExtractedChatOrder, Invoice } from "../schema";
 import { db } from "../config/db";
-import { extractedOrdersTable, chatOrdersTable } from "@shared/schema";
+import { extractedOrdersTable, chatOrdersTable } from "../schema";
 import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {

@@ -1,4 +1,4 @@
-import type { ExtractedChatOrder, Invoice, InvoiceItem } from "@shared/schema";
+import type { ExtractedChatOrder, Invoice, InvoiceItem } from "../schema";
 
 export const generateInvoiceData = (order: ExtractedChatOrder, business_name?: string, gst_number?: string): Invoice => {
   const dateStr = new Date().toLocaleDateString("en-IN", { 
