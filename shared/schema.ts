@@ -128,6 +128,3 @@ export const chatOrdersTable = pgTable("chat_orders", {
   raw_messages: jsonb("raw_messages").$type<ChatMessage[]>().notNull(),
   invoice: jsonb("invoice").$type<Invoice>(),
 });
-
-export const extractedOrdersTable = pgTable("extracted_orders", { /* ... */ });
-export const chatOrdersTable = pgTable("chat_orders", { /* ... */ });

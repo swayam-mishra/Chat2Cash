@@ -2,6 +2,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import { randomUUID } from "crypto";
 import type { ExtractedOrder, ChatMessage, ExtractedChatOrder } from "@shared/schema";
 import { log, logError } from "./index";
+import dotenv from "dotenv";
+
+dotenv.config({ path: "../.env" });
 
 const DEFAULT_MODEL_STR = "claude-sonnet-4-20250514";
 const CHAT_EXTRACT_MODEL = "claude-sonnet-4-5-20250929";
