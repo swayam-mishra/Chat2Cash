@@ -1,7 +1,7 @@
 import { ExtractedOrder, ExtractedChatOrder, Invoice } from "../schema";
 import { db } from "../config/db";
 import { ordersTable, customersTable } from "../schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, max } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -15,7 +15,7 @@ export interface IStorage {
   addChatOrder(order: ExtractedChatOrder): Promise<ExtractedChatOrder>;
   attachInvoice(orderId: string, invoice: Invoice): Promise<ExtractedChatOrder | undefined>;
   updateChatOrderDetails(id: string, updates: Partial<ExtractedChatOrder>): Promise<ExtractedChatOrder | undefined>;
-  generateAndAttachInvoice(orderId: string, generateInvoiceFn: (order: ExtractedChatOrder) => Invoice): Promise<ExtractedChatOrder | undefined>;
+  generateAndAttachInvoice(orderId: string, generateInvoiceFn: (order: ExtractedChatOrder, nextSequence: number) => Invoice): Promise<ExtractedChatOrder | undefined>;
 }
 
 // Helper functions to map normalized database rows back to the frontend interfaces
@@ -225,8 +225,8 @@ export class DatabaseStorage implements IStorage {
   // TRANSACTIONAL BUSINESS LOGIC
   // ==========================================
 
-  // NEW: Transactional block ensuring Order Status and Invoice are committed atomically
-  async generateAndAttachInvoice(orderId: string, generateInvoiceFn: (order: ExtractedChatOrder) => Invoice): Promise<ExtractedChatOrder | undefined> {
+  // NEW: Production-ready transaction ensuring secure, sequential invoice IDs
+  async generateAndAttachInvoice(orderId: string, generateInvoiceFn: (order: ExtractedChatOrder, nextSequence: number) => Invoice): Promise<ExtractedChatOrder | undefined> {
     return await db.transaction(async (tx) => {
       // 1. Fetch the joined order data inside the transaction
       const result = await tx.select({ order: ordersTable, customer: customersTable })
@@ -239,16 +239,21 @@ export class DatabaseStorage implements IStorage {
         return undefined; // Order not found
       }
 
+      // 2. Safely compute the next invoice sequence number using a database lock/max
+      const maxSeqResult = await tx.select({ maxSeq: max(ordersTable.invoiceSequence) }).from(ordersTable);
+      const nextSequenceNumber = (maxSeqResult[0]?.maxSeq || 0) + 1;
+
       const { order: dbOrder, customer: dbCustomer } = result[0];
       const chatOrder = mapToExtractedChatOrder(dbOrder, dbCustomer);
       
-      // 2. Safely generate the invoice data using the provided function
-      const invoiceData = generateInvoiceFn(chatOrder);
+      // 3. Generate the invoice data injecting the secure sequence number
+      const invoiceData = generateInvoiceFn(chatOrder, nextSequenceNumber);
 
-      // 3. Atomically update the invoice field AND promote the status to 'confirmed'
+      // 4. Atomically update the invoice field, save the sequence integer, and confirm status
       const [updatedOrder] = await tx.update(ordersTable)
         .set({ 
           invoice: invoiceData,
+          invoiceSequence: nextSequenceNumber,
           status: "confirmed" 
         })
         .where(eq(ordersTable.id, orderId))

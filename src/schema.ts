@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { pgTable, text, real, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, real, jsonb, timestamp, integer } from "drizzle-orm/pg-core";
 
 export const orderItemSchema = z.object({
   name: z.string(),
@@ -81,6 +81,7 @@ export const invoiceSchema = z.object({
   subtotal: z.number(),
   cgst: z.number(),
   sgst: z.number(),
+  igst: z.number().optional(),
   total: z.number(),
   business_name: z.string(),
   gst_number: z.string(),
@@ -131,6 +132,8 @@ export const ordersTable = pgTable("orders", {
   confidence: text("confidence").notNull(),
   status: text("status").default("pending").notNull(),
   invoice: jsonb("invoice").$type<Invoice>(),
+
+  invoiceSequence: integer("invoice_sequence"),
   
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 });
