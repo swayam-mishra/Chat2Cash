@@ -36,10 +36,11 @@ export const extractOrderFromChatRequestSchema = z.object({
   messages: z.array(chatMessageSchema).min(1, "At least one message is required"),
 });
 
+// CHANGED: Added input boundaries to prevent negative numbers or empty strings
 export const extractedChatOrderItemSchema = z.object({
-  product_name: z.string(),
-  quantity: z.number(),
-  price: z.number().nullable().optional(),
+  product_name: z.string().min(1, "Product name cannot be empty"),
+  quantity: z.number().positive("Quantity must be greater than 0"),
+  price: z.number().min(0, "Price cannot be negative").nullable().optional(),
 });
 
 export const extractedChatOrderSchema = z.object({
@@ -56,15 +57,15 @@ export const extractedChatOrderSchema = z.object({
   raw_messages: z.array(chatMessageSchema),
 });
 
-// NEW: Schema for validating edit requests
+// CHANGED: Added boundary validations and .strict() to prevent payload pollution
 export const updateChatOrderSchema = z.object({
-  customer_name: z.string().nullable().optional(),
+  customer_name: z.string().min(1, "Customer name cannot be empty").nullable().optional(),
   items: z.array(extractedChatOrderItemSchema).optional(),
   delivery_address: z.string().nullable().optional(),
   delivery_date: z.string().nullable().optional(),
   special_instructions: z.string().nullable().optional(),
-  total: z.number().nullable().optional(),
-});
+  total: z.number().min(0, "Total cannot be negative").nullable().optional(),
+}).strict("Request body contains invalid or restricted fields.");
 
 export const invoiceItemSchema = z.object({
   product_name: z.string(),
@@ -101,7 +102,7 @@ export type InsertUser = { username: string; password: string };
 export type User = { id: string; username: string; password: string };
 
 // ==========================================
-// NEW NORMALIZED & CONSOLIDATED DB TABLES
+// NORMALIZED & CONSOLIDATED DB TABLES
 // ==========================================
 
 export const customersTable = pgTable("customers", {
@@ -137,7 +138,6 @@ export const ordersTable = pgTable("orders", {
   
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 });
-
 
 // ==========================================
 // OLD TABLES (Commented out for migration reference)

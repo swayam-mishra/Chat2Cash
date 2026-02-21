@@ -7,6 +7,11 @@ import dotenv from "dotenv";
 
 dotenv.config({ path: "../.env" });
 
+// NEW: Fail-fast validation for the API Key at startup
+if (!process.env.ANTHROPIC_API_KEY) {
+  throw new Error("CRITICAL: ANTHROPIC_API_KEY environment variable is missing. The AI extraction service cannot start.");
+}
+
 // Updated to the valid standard models that support prompt caching and tool use
 const DEFAULT_MODEL_STR = "claude-3-5-sonnet-20241022";
 const CHAT_EXTRACT_MODEL = "claude-3-5-sonnet-20241022";
