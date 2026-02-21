@@ -1,13 +1,15 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { randomUUID } from "crypto";
-import type { ExtractedOrder, ChatMessage, ExtractedChatOrder } from "@shared/schema";
+import type { ExtractedOrder, ChatMessage, ExtractedChatOrder } from "../schema";
 import { log, logError } from "../middlewares/logger";
+import { getPrompt } from "./promptManager";
 import dotenv from "dotenv";
 
 dotenv.config({ path: "../.env" });
 
-const DEFAULT_MODEL_STR = "claude-sonnet-4-20250514";
-const CHAT_EXTRACT_MODEL = "claude-sonnet-4-5-20250929";
+// Updated to the valid standard models that support prompt caching and tool use
+const DEFAULT_MODEL_STR = "claude-3-5-sonnet-20241022";
+const CHAT_EXTRACT_MODEL = "claude-3-5-sonnet-20241022";
 
 const REQUEST_TIMEOUT_MS = 30000;
 const MAX_RETRIES = 1;
@@ -17,11 +19,29 @@ const anthropic = new Anthropic({
   timeout: REQUEST_TIMEOUT_MS,
 });
 
-async function callClaudeWithRetry(
+// Utility: Sliding Window to prevent exceeding token limits on long chats
+function applySlidingWindow(messages: ChatMessage[], maxChars: number = 12000): ChatMessage[] {
+  let currentCount = 0;
+  const pruned: ChatMessage[] = [];
+  
+  // Iterate backwards to keep the most recent messages (bottom of chat)
+  for (let i = messages.length - 1; i >= 0; i--) {
+    currentCount += messages[i].text.length;
+    if (currentCount > maxChars) break;
+    pruned.unshift(messages[i]);
+  }
+  
+  return pruned;
+}
+
+// Utility: Core tool invocation leveraging Prompt Caching 
+async function extractWithTool(
   model: string,
-  system: string,
+  systemPrompt: string,
   userContent: string,
-): Promise<string> {
+  toolName: string,
+  toolSchema: any
+): Promise<any> {
   let lastError: Error | null = null;
   const callStart = Date.now();
 
@@ -37,16 +57,32 @@ async function callClaudeWithRetry(
       const response = await anthropic.messages.create({
         model,
         max_tokens: 1024,
-        system,
+        system: [
+          {
+            type: "text",
+            text: systemPrompt,
+            cache_control: { type: "ephemeral" } // Prompt Caching
+          }
+        ],
+        tools: [{
+          name: toolName,
+          description: "Record structured order details from the provided message/chat",
+          input_schema: toolSchema
+        }],
+        tool_choice: { type: "tool", name: toolName }, // Forces Claude to use this tool
         messages: [{ role: "user", content: userContent }],
       });
 
       const elapsed = Date.now() - attemptStart;
-      const text =
-        response.content[0].type === "text" ? response.content[0].text : "";
+      
+      const toolCall = response.content.find(block => block.type === "tool_use");
+      if (!toolCall || toolCall.type !== "tool_use") {
+        throw new Error("Claude did not return the expected structured tool call.");
+      }
 
-      log(`Claude API responded in ${elapsed}ms (${text.length} chars, usage: ${response.usage.input_tokens}in/${response.usage.output_tokens}out)`, "anthropic");
-      return text;
+      log(`Claude API responded in ${elapsed}ms (usage: ${response.usage.input_tokens}in/${response.usage.output_tokens}out)`, "anthropic");
+      
+      return toolCall.input;
     } catch (error: any) {
       lastError = error;
       const elapsed = Date.now() - callStart;
@@ -64,85 +100,37 @@ async function callClaudeWithRetry(
   throw new Error(`Claude API failed after ${MAX_RETRIES + 1} attempts: ${lastError?.message}`);
 }
 
-function parseJsonResponse(text: string): any {
-  try {
-    return JSON.parse(text);
-  } catch {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-    throw new Error("AI extraction failed");
-  }
-}
-
-const SYSTEM_PROMPT = `You are an AI assistant that extracts order details from WhatsApp messages sent to Indian businesses.
-These messages can be in English, Hindi, Hinglish (Hindi written in English), or any Indian language.
-
-Your job is to parse the message and return a structured JSON object with the following fields:
-- customerName (string or null): The customer's name if mentioned
-- customerPhone (string or null): The customer's phone number if mentioned
-- items (array): List of items ordered, each with:
-  - name (string): Item name
-  - quantity (number): Quantity ordered
-  - unit (string or null): Unit of measurement (kg, pcs, dozen, litre, packet, etc.)
-  - pricePerUnit (number or null): Price per unit if mentioned
-  - totalPrice (number or null): Total price for this item if mentioned
-- totalAmount (number or null): Total order amount if mentioned or calculable
-- currency (string): Always "INR"
-- notes (string or null): Any special instructions, delivery details, or additional notes
-- confidence (number): Your confidence in the extraction accuracy from 0 to 1
-
-Important rules:
-- Be smart about Indian units and colloquial terms (e.g., "kilo" = kg, "darjan" = dozen = 12 pcs)
-- Handle Hinglish naturally (e.g., "2 kilo aloo" = 2 kg potatoes)
-- If prices are mentioned in various formats (₹, Rs, Rs., rupees), normalize them as numbers
-- Extract delivery addresses or special instructions as notes
-- If the message is not an order at all, still return a valid JSON with empty items array and low confidence
-
-Return ONLY valid JSON, no markdown, no explanation.
-
-<example>
-Input: "2 kilo aashirvaad aata, 3 darjan kele aur 1 packet amul milk bhijwa do. 300 Rs pay kar diya hai."
-Output:
-{
-  "customerName": null,
-  "customerPhone": null,
-  "items": [
-    { "name": "Aashirvaad Aata", "quantity": 2, "unit": "kg", "pricePerUnit": null, "totalPrice": null },
-    { "name": "Kele (Bananas)", "quantity": 3, "unit": "dozen", "pricePerUnit": null, "totalPrice": null },
-    { "name": "Amul Milk", "quantity": 1, "unit": "packet", "pricePerUnit": null, "totalPrice": null }
-  ],
-  "totalAmount": 300,
-  "currency": "INR",
-  "notes": "bhijwa do, payment of 300 Rs made",
-  "confidence": 0.95
-}
-</example>
-
-<example>
-Input: "Bhaiya 10 piece lucknowi kurti white wali chahiye wholesale me. Address: Aminabad market."
-Output:
-{
-  "customerName": null,
-  "customerPhone": null,
-  "items": [
-    { "name": "Lucknowi Kurti - White (Wholesale)", "quantity": 10, "unit": "pieces", "pricePerUnit": null, "totalPrice": null }
-  ],
-  "totalAmount": null,
-  "currency": "INR",
-  "notes": "Address: Aminabad market",
-  "confidence": 0.90
-}
-</example>`;
-
-export async function extractOrderFromMessage(
-  rawMessage: string,
-): Promise<ExtractedOrder> {
+export async function extractOrderFromMessage(rawMessage: string): Promise<ExtractedOrder> {
   log(`Extracting order from single message (${rawMessage.length} chars)`, "anthropic");
 
-  const text = await callClaudeWithRetry(DEFAULT_MODEL_STR, SYSTEM_PROMPT, rawMessage);
-  const parsed = parseJsonResponse(text);
+  const systemPrompt = getPrompt("SINGLE_MESSAGE_EXTRACT", "v1");
+  const toolSchema = {
+    type: "object",
+    properties: {
+      customerName: { type: ["string", "null"] },
+      customerPhone: { type: ["string", "null"] },
+      items: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            quantity: { type: "number" },
+            unit: { type: ["string", "null"] },
+            pricePerUnit: { type: ["number", "null"] },
+            totalPrice: { type: ["number", "null"] }
+          },
+          required: ["name", "quantity"]
+        }
+      },
+      totalAmount: { type: ["number", "null"] },
+      notes: { type: ["string", "null"] },
+      confidence: { type: "number", description: "Confidence score from 0.0 to 1.0" }
+    },
+    required: ["items", "confidence"]
+  };
+
+  const parsed = await extractWithTool(DEFAULT_MODEL_STR, systemPrompt, rawMessage, "record_order", toolSchema);
 
   log(`Extraction complete — ${parsed.items?.length || 0} items found`, "anthropic");
 
@@ -155,14 +143,11 @@ export async function extractOrderFromMessage(
           name: String(item.name || "Unknown"),
           quantity: Number(item.quantity) || 1,
           unit: item.unit || undefined,
-          pricePerUnit:
-            item.pricePerUnit != null ? Number(item.pricePerUnit) : undefined,
-          totalPrice:
-            item.totalPrice != null ? Number(item.totalPrice) : undefined,
+          pricePerUnit: item.pricePerUnit != null ? Number(item.pricePerUnit) : undefined,
+          totalPrice: item.totalPrice != null ? Number(item.totalPrice) : undefined,
         }))
       : [],
-    totalAmount:
-      parsed.totalAmount != null ? Number(parsed.totalAmount) : undefined,
+    totalAmount: parsed.totalAmount != null ? Number(parsed.totalAmount) : undefined,
     currency: "INR",
     notes: parsed.notes || undefined,
     rawMessage,
@@ -174,155 +159,41 @@ export async function extractOrderFromMessage(
   return order;
 }
 
-const CHAT_EXTRACT_SYSTEM_PROMPT = `You are an AI assistant for Indian SMBs extracting order details from WhatsApp conversations. You are an expert in Indian business communication patterns and Hinglish (Hindi-English mix).
+export async function extractOrderFromChat(messages: ChatMessage[]): Promise<ExtractedChatOrder> {
+  const optimizedMessages = applySlidingWindow(messages);
+  log(`Extracting order from chat (${optimizedMessages.length} messages, senders: ${Array.from(new Set(optimizedMessages.map((m) => m.sender))).join(", ")})`, "anthropic");
 
-LANGUAGE & CULTURAL CONTEXT:
-- "bhaiya", "didi", "aunty", "uncle", "ji" are respectful address terms — NOT customer names
-- "chahiye" = need/want, "bhej do" / "bhejiye" = please send, "kitna" = how much
-- "wala/wali" = "the one", used for referencing previously discussed items (e.g., "wo wala" = "that one")
-- "piece" / "pcs" = individual units
-- "darjan" / "dozen" = 12 pieces
-- "kilo" = kg, "litre" = L, "packet" / "dabba" = pack
-- Numbers can be written as digits ("5") or words ("five", "paanch", "das" = 10, "bees" = 20)
-- "aur" = and, "bhi" = also
+  const conversationText = optimizedMessages.map((m) => `${m.sender}: ${m.text}`).join("\n");
+  const systemPrompt = getPrompt("CHAT_EXTRACT", "v1");
+  
+  const toolSchema = {
+    type: "object",
+    properties: {
+      customer_name: { type: ["string", "null"] },
+      items: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            product_name: { type: "string" },
+            quantity: { type: "number" },
+            price: { type: ["number", "null"] }
+          },
+          required: ["product_name", "quantity"]
+        }
+      },
+      delivery_address: { type: ["string", "null"] },
+      delivery_date: { type: ["string", "null"] },
+      special_instructions: { type: ["string", "null"] },
+      total: { type: ["number", "null"] },
+      confidence: { type: "string", enum: ["high", "medium", "low"] }
+    },
+    required: ["items", "confidence"]
+  };
 
-EDGE CASES YOU MUST HANDLE:
-1. VAGUE REFERENCES: When someone says "wo wala", "last time wala", "same as before" — describe the item as best you can from context (e.g., "yellow kurti (referenced from previous order)"). Set confidence to "medium" or "low" if the item is ambiguous.
-2. PRICE NEGOTIATION: If original and negotiated prices are discussed, use the FINAL agreed price. If no final agreement, use the last mentioned price. If no price at all, set price to null — never fail or make up prices.
-3. CUSTOMER NAME: Extract from the "sender" field in the messages. If sender is generic like "Customer" or unnamed, default to "Customer".
-4. MISSING PRICES: Always set price to null when not mentioned. Never guess or fabricate prices. Set total to null if prices are unavailable.
-5. DATES & DEADLINES:
-   - "kal" = tomorrow, "parso" = day after tomorrow
-   - "aaj" = today
-   - "Friday tak" = by Friday
-   - "next week", "is hafte", "agle hafte" = next week
-   - "jaldi" = soon/urgent
-   - Keep delivery_date in natural language as stated.
-6. NON-ORDER MESSAGES: Greetings ("Hi", "Hello", "Namaste"), pleasantries, and follow-ups are common. Ignore them and focus only on order-related content. If the conversation has NO order content at all, return empty items array with confidence "low".
+  const parsed = await extractWithTool(CHAT_EXTRACT_MODEL, systemPrompt, conversationText, "record_chat_order", toolSchema);
 
-OUTPUT FORMAT — return ONLY this JSON structure, no markdown fences:
-{
-  "customer_name": "string or null (use sender name, default to 'Customer' if unknown)",
-  "items": [
-    {
-      "product_name": "string (descriptive, include color/size/variant if mentioned)",
-      "quantity": number,
-      "price": number_or_null (per unit final price, null if not mentioned)
-    }
-  ],
-  "delivery_address": "string or null",
-  "delivery_date": "string or null (keep in natural language as stated)",
-  "special_instructions": "string or null (any notes, preferences, urgency)",
-  "total": number_or_null (calculate only if all item prices are known, else null),
-  "confidence": "high | medium | low"
-}
-
-CONFIDENCE GUIDE:
-- "high": Clear items, quantities, and (optionally) prices stated explicitly
-- "medium": Items identifiable but some ambiguity (vague references, missing details)
-- "low": Very unclear, mostly chit-chat, or heavily relies on context not in the conversation
-
-<example>
-Input Conversation:
-Priya Sharma: Bhaiya 2 banarasi saree red wali dena. Kal tak B-42 Lajpat nagar bhej do.
-Priya Sharma: Aur 1 matching blouse piece bhi rakh lena. Kitna hua total?
-Shopkeeper: 8500 ki saree hai ek, blouse 750 ka.
-
-Output:
-{
-  "customer_name": "Priya Sharma",
-  "items": [
-    { "product_name": "Banarasi Saree - Red", "quantity": 2, "price": 8500 },
-    { "product_name": "Matching Blouse Piece", "quantity": 1, "price": 750 }
-  ],
-  "delivery_address": "B-42 Lajpat nagar",
-  "delivery_date": "kal tak",
-  "special_instructions": null,
-  "total": 17750,
-  "confidence": "high"
-}
-</example>
-
-<example>
-Input Conversation:
-Rajesh Gupta: 100 piece cotton kurti blue color ka kya rate lagega wholesale me?
-Vendor: 450 per piece padega sir
-Rajesh Gupta: 420 lagao toh 100 final karte hain. Friday delivery Surat, premium packing chahiye.
-Vendor: Thik hai sir done.
-
-Output:
-{
-  "customer_name": "Rajesh Gupta",
-  "items": [
-    { "product_name": "Cotton Kurti - Blue Color (Wholesale)", "quantity": 100, "price": 420 }
-  ],
-  "delivery_address": "Surat",
-  "delivery_date": "Friday",
-  "special_instructions": "premium packing chahiye",
-  "total": 42000,
-  "confidence": "high"
-}
-</example>
-
-<example>
-Input Conversation:
-Customer: Hello aunty, wo last time wala chanderi suit set bhej dijiye 3 piece.
-Customer: Payment google pay kar rahi hu.
-
-Output:
-{
-  "customer_name": "Customer",
-  "items": [
-    { "product_name": "Chanderi Suit Set (Same as last time)", "quantity": 3, "price": null }
-  ],
-  "delivery_address": null,
-  "delivery_date": null,
-  "special_instructions": "Payment google pay",
-  "total": null,
-  "confidence": "medium"
-}
-</example>
-
-<example>
-Input Conversation:
-Rahul: Hi, kal dukan khuli hai kya?
-Shop: Haan bhaiya, 10 baje aaiye.
-
-Output:
-{
-  "customer_name": "Rahul",
-  "items": [],
-  "delivery_address": null,
-  "delivery_date": null,
-  "special_instructions": null,
-  "total": null,
-  "confidence": "low"
-}
-</example>`;
-
-export async function extractOrderFromChat(
-  messages: ChatMessage[],
-): Promise<ExtractedChatOrder> {
-  log(
-    `Extracting order from chat (${messages.length} messages, senders: ${Array.from(new Set(messages.map((m) => m.sender))).join(", ")})`,
-    "anthropic",
-  );
-
-  const conversationText = messages
-    .map((m) => `${m.sender}: ${m.text}`)
-    .join("\n");
-
-  const text = await callClaudeWithRetry(
-    CHAT_EXTRACT_MODEL,
-    CHAT_EXTRACT_SYSTEM_PROMPT,
-    conversationText,
-  );
-  const parsed = parseJsonResponse(text);
-
-  log(
-    `Chat extraction complete — customer: ${parsed.customer_name || "unknown"}, ${parsed.items?.length || 0} items, confidence: ${parsed.confidence}`,
-    "anthropic",
-  );
+  log(`Chat extraction complete — customer: ${parsed.customer_name || "unknown"}, ${parsed.items?.length || 0} items, confidence: ${parsed.confidence}`, "anthropic");
 
   const order: ExtractedChatOrder = {
     id: String(Date.now()),
@@ -343,8 +214,35 @@ export async function extractOrderFromChat(
       : "medium",
     status: "pending",
     created_at: new Date().toISOString(),
-    raw_messages: messages,
+    raw_messages: messages, // We preserve full original array in database
   };
 
   return order;
+}
+
+// Implement Streaming extraction capability to report progress for long sequences
+export async function* streamExtractOrderFromChat(messages: ChatMessage[]) {
+  const optimizedMessages = applySlidingWindow(messages);
+  const conversationText = optimizedMessages.map((m) => `${m.sender}: ${m.text}`).join("\n");
+  const systemPrompt = getPrompt("CHAT_EXTRACT", "v1");
+
+  const stream = await anthropic.messages.create({
+    model: CHAT_EXTRACT_MODEL,
+    max_tokens: 1024,
+    system: [
+      {
+        type: "text",
+        text: systemPrompt,
+        cache_control: { type: "ephemeral" }
+      }
+    ],
+    messages: [{ role: "user", content: conversationText }],
+    stream: true,
+  });
+
+  for await (const chunk of stream) {
+    if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+      yield chunk.delta.text; 
+    }
+  }
 }
