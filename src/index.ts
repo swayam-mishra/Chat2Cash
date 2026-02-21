@@ -1,23 +1,44 @@
-import express, { type Request, Response, NextFunction } from "express";
-import apiRoutes from "./routes/index";
-import { log, requestLogger } from "./middlewares/logger";
-import { apiLimiter } from "./middlewares/rateLimiter";
+import { Router } from "express";
+import * as orderController from "./controllers/orderController";
+import * as invoiceController from "./controllers/invoiceController";
+import { db } from "./config/db";
+import { sql } from "drizzle-orm";
 
-const app = express();
+const router = Router();
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+// CHANGED: True readiness health check
+router.get("/health", async (_req, res) => {
+  try {
+    // 1. Check Database Connectivity
+    await db.execute(sql`SELECT 1`);
+    
+    // 2. Check AI Service Readiness
+    const isAnthropicConfigured = !!process.env.ANTHROPIC_API_KEY;
 
-app.use(requestLogger);
-app.use("/api/", apiLimiter);
-app.use("/api/", apiRoutes);
-
-app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-  const status = err.status || err.statusCode || 500;
-  res.status(status).json({ message: err.message || "Internal Server Error" });
+    res.status(200).json({ 
+      status: "ok", 
+      database: "connected",
+      ai_service: isAnthropicConfigured ? "ready" : "missing_key",
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    res.status(503).json({ 
+      status: "error", 
+      database: "disconnected",
+      message: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, "0.0.0.0", () => {
-  log(`Backend API server successfully started on port ${PORT}`);
-});
+router.get("/stats", orderController.getStats);
+router.get("/orders", orderController.getOrders);
+router.get("/orders/:id", orderController.getOrderById);
+router.post("/extract", orderController.extractOrder);
+router.post("/extract-order", orderController.extractChatOrder);
+router.patch("/orders/:id/edit", orderController.editOrder);
+router.patch("/orders/:id", orderController.updateOrderStatus);
+router.delete("/orders/:id", orderController.deleteOrder);
+router.post("/generate-invoice", invoiceController.generateInvoice);
+
+export default router;

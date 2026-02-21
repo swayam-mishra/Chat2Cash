@@ -14,9 +14,13 @@ export const getStats = async (_req: Request, res: Response) => {
   }
 };
 
-export const getOrders = async (_req: Request, res: Response) => {
+export const getOrders = async (req: Request, res: Response) => {
   try {
-    const data = await orderService.getAllOrders();
+    // CHANGED: Extract pagination params from the query string
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+
+    const data = await orderService.getAllOrders(page, limit);
     res.json(data);
   } catch (error: any) {
     res.status(500).json({ message: error.message || "Failed to get orders" });
@@ -24,7 +28,7 @@ export const getOrders = async (_req: Request, res: Response) => {
 };
 
 export const getOrderById = async (req: Request, res: Response) => {
-  const order = await storage.getOrder(req.params.id);
+  const order = await storage.getOrder(req.params.id as string);
   if (!order) return res.status(404).json({ message: "Order not found" });
   res.json(order);
 };
@@ -61,7 +65,7 @@ export const editOrder = async (req: Request, res: Response) => {
     const parsed = updateChatOrderSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.errors[0].message });
 
-    const updatedOrder = await storage.updateChatOrderDetails(req.params.id, parsed.data);
+    const updatedOrder = await storage.updateChatOrderDetails(req.params.id as string, parsed.data);
     if (!updatedOrder) return res.status(404).json({ message: "Order not found" });
     res.json(updatedOrder);
   } catch (error: any) {
@@ -74,7 +78,7 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
     const parsed = z.object({ status: z.enum(["pending", "confirmed", "fulfilled", "cancelled"]) }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid status" });
 
-    const order = await storage.updateOrderStatus(req.params.id, parsed.data.status);
+    const order = await storage.updateOrderStatus(req.params.id as string, parsed.data.status);
     if (!order) return res.status(404).json({ message: "Order not found" });
     res.json(order);
   } catch (error: any) {
@@ -84,7 +88,7 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
 
 export const deleteOrder = async (req: Request, res: Response) => {
   try {
-    const deleted = await storage.deleteOrder(req.params.id);
+    const deleted = await storage.deleteOrder(req.params.id as string);
     if (!deleted) return res.status(404).json({ message: "Order not found" });
     res.status(204).send();
   } catch (error: any) {

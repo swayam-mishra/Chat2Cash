@@ -1,7 +1,7 @@
 import { ExtractedOrder, ExtractedChatOrder, Invoice } from "../schema";
 import { db } from "../config/db";
 import { ordersTable, customersTable } from "../schema";
-import { eq, desc, max } from "drizzle-orm";
+import { eq, desc, max, count, sum, and } from "drizzle-orm"; // CHANGED: Added count, sum, and
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -10,12 +10,18 @@ export interface IStorage {
   addOrder(order: ExtractedOrder): Promise<ExtractedOrder>;
   updateOrderStatus(id: string, status: ExtractedOrder["status"]): Promise<ExtractedOrder | undefined>;
   deleteOrder(id: string): Promise<boolean>;
-  getChatOrders(): Promise<ExtractedChatOrder[]>;
+  
+  // CHANGED: Updated signatures for pagination and aggregation
+  getChatOrders(limit?: number, offset?: number): Promise<ExtractedChatOrder[]>;
   getChatOrder(id: string): Promise<ExtractedChatOrder | undefined>;
   addChatOrder(order: ExtractedChatOrder): Promise<ExtractedChatOrder>;
   attachInvoice(orderId: string, invoice: Invoice): Promise<ExtractedChatOrder | undefined>;
   updateChatOrderDetails(id: string, updates: Partial<ExtractedChatOrder>): Promise<ExtractedChatOrder | undefined>;
   generateAndAttachInvoice(orderId: string, generateInvoiceFn: (order: ExtractedChatOrder, nextSequence: number) => Invoice): Promise<ExtractedChatOrder | undefined>;
+  
+  // NEW: Added aggregation method signatures
+  getChatOrdersCount(statusFilter?: string): Promise<number>;
+  getTotalRevenue(): Promise<number>;
 }
 
 // Helper functions to map normalized database rows back to the frontend interfaces
@@ -128,14 +134,40 @@ export class DatabaseStorage implements IStorage {
   // CHAT ORDERS (chatOrders)
   // ==========================================
 
-  async getChatOrders(): Promise<ExtractedChatOrder[]> {
+  // CHANGED: Added limit and offset for pagination
+  async getChatOrders(limit: number = 50, offset: number = 0): Promise<ExtractedChatOrder[]> {
     const results = await db.select({ order: ordersTable, customer: customersTable })
       .from(ordersTable)
       .innerJoin(customersTable, eq(ordersTable.customerId, customersTable.id))
       .where(eq(ordersTable.extractionType, 'chat_log'))
-      .orderBy(desc(ordersTable.createdAt));
+      .orderBy(desc(ordersTable.createdAt))
+      .limit(limit)
+      .offset(offset);
 
     return results.map(row => mapToExtractedChatOrder(row.order, row.customer));
+  }
+
+  // NEW: Optimized count query
+  async getChatOrdersCount(statusFilter?: string): Promise<number> {
+    const conditions = [eq(ordersTable.extractionType, 'chat_log')];
+    if (statusFilter) {
+      conditions.push(eq(ordersTable.status, statusFilter));
+    }
+    
+    const result = await db.select({ value: count() })
+      .from(ordersTable)
+      .where(and(...conditions));
+      
+    return result[0].value;
+  }
+
+  // NEW: Optimized revenue sum query
+  async getTotalRevenue(): Promise<number> {
+    const result = await db.select({ value: sum(ordersTable.totalAmount) })
+      .from(ordersTable)
+      .where(eq(ordersTable.extractionType, 'chat_log'));
+      
+    return Number(result[0].value || 0);
   }
 
   async getChatOrder(id: string): Promise<ExtractedChatOrder | undefined> {

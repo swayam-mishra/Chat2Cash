@@ -1,28 +1,36 @@
 import { storage } from "./storageService";
 
 export const getOrderStats = async () => {
-  const chatOrders = await storage.getChatOrders();
-  const sorted = chatOrders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  
-  const pending_payments = sorted.filter((o) => o.status === "pending").length;
-  const total_revenue = sorted.reduce((sum, o) => sum + (o.total || 0), 0);
+  // CHANGED: Let the database calculate these via aggregation queries
+  const total_orders = await storage.getChatOrdersCount();
+  const pending_payments = await storage.getChatOrdersCount("pending");
+  const total_revenue = await storage.getTotalRevenue();
+  const recent_orders = await storage.getChatOrders(10, 0); // Limit to 10 for dashboard
   
   return {
-    total_orders: sorted.length,
+    total_orders,
     pending_payments,
     total_revenue,
-    recent_orders: sorted.slice(0, 10),
+    recent_orders,
   };
 };
 
-export const getAllOrders = async () => {
-  const chatOrders = await storage.getChatOrders();
-  const allOrders = chatOrders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  const pending = allOrders.filter((o) => o.status === "pending").length;
+export const getAllOrders = async (page: number = 1, limit: number = 50) => {
+  // CHANGED: Implementing pagination logic
+  const offset = (page - 1) * limit;
+  
+  const orders = await storage.getChatOrders(limit, offset);
+  const total = await storage.getChatOrdersCount();
+  const pending = await storage.getChatOrdersCount("pending");
   
   return {
-    orders: allOrders,
-    total: allOrders.length,
+    orders,
+    pagination: {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    },
     pending,
   };
 };
