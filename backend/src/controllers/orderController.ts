@@ -1,22 +1,26 @@
 import { Request, Response } from "express";
 import { storage } from "../services/storageService";
 import { extractOrderFromMessage, extractOrderFromChat } from "../services/anthropicService";
+import * as orderService from "../services/orderService";
 import { extractOrderRequestSchema, extractOrderFromChatRequestSchema, updateChatOrderSchema } from "@shared/schema";
 import { z } from "zod";
-import { log } from "../middlewares/logger";
 
 export const getStats = async (_req: Request, res: Response) => {
-  const chatOrders = await storage.getChatOrders();
-  const sorted = chatOrders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  const pending_payments = sorted.filter((o) => o.status === "pending").length;
-  const total_revenue = sorted.reduce((sum, o) => sum + (o.total || 0), 0);
-  res.json({ total_orders: sorted.length, pending_payments, total_revenue, recent_orders: sorted.slice(0, 10) });
+  try {
+    const stats = await orderService.getOrderStats();
+    res.json(stats);
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || "Failed to get stats" });
+  }
 };
 
 export const getOrders = async (_req: Request, res: Response) => {
-  const chatOrders = await storage.getChatOrders();
-  const allOrders = chatOrders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  res.json({ orders: allOrders, total: allOrders.length, pending: allOrders.filter((o) => o.status === "pending").length });
+  try {
+    const data = await orderService.getAllOrders();
+    res.json(data);
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || "Failed to get orders" });
+  }
 };
 
 export const getOrderById = async (req: Request, res: Response) => {

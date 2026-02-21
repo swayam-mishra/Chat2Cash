@@ -1,5 +1,5 @@
 import { ExtractedOrder, ExtractedChatOrder, Invoice } from "@shared/schema";
-import { db } from "./db";
+import { db } from "../config/db";
 import { extractedOrdersTable, chatOrdersTable } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 

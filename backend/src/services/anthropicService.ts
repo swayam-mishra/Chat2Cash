@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { randomUUID } from "crypto";
 import type { ExtractedOrder, ChatMessage, ExtractedChatOrder } from "@shared/schema";
-import { log, logError } from "./index";
+import { log, logError } from "../middlewares/logger";
 import dotenv from "dotenv";
 
 dotenv.config({ path: "../.env" });
