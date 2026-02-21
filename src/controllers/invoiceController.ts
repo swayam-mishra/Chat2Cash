@@ -16,16 +16,20 @@ export const generateInvoice = async (req: Request, res: Response) => {
     if (!parsed.success) return res.status(400).json({ message: parsed.error.errors[0].message });
 
     const { order_id, business_name, gst_number } = parsed.data;
-    const order = await storage.getChatOrder(order_id);
-    if (!order) return res.status(404).json({ message: "Order not found" });
 
-    // Delegate math and generation to the invoice service
-    const invoice = generateInvoiceData(order, business_name, gst_number);
+    // Call the transaction method
+    const updatedOrder = await storage.generateAndAttachInvoice(order_id, (orderData) => {
+      // Pass the math/logic function into the transaction
+      return generateInvoiceData(orderData, business_name, gst_number);
+    });
 
-    await storage.attachInvoice(order_id, invoice);
-    log(`Invoice ${invoice.invoice_number} generated for order ${order_id}`);
+    if (!updatedOrder) {
+      return res.status(404).json({ message: "Order not found or transaction failed" });
+    }
+
+    log(`Invoice ${updatedOrder.invoice.invoice_number} generated and attached atomically to order ${order_id}`);
     
-    res.json(invoice);
+    res.json(updatedOrder.invoice);
   } catch (error: any) {
     res.status(500).json({ message: error.message || "Failed to generate invoice" });
   }

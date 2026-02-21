@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { pgTable, text, real, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, real, jsonb, timestamp } from "drizzle-orm/pg-core";
 
 export const orderItemSchema = z.object({
   name: z.string(),
@@ -95,10 +95,52 @@ export type ChatMessage = z.infer<typeof chatMessageSchema>;
 export type ExtractOrderFromChatRequest = z.infer<typeof extractOrderFromChatRequestSchema>;
 export type ExtractedChatOrderItem = z.infer<typeof extractedChatOrderItemSchema>;
 export type ExtractedChatOrder = z.infer<typeof extractedChatOrderSchema>;
-export type UpdateChatOrderRequest = z.infer<typeof updateChatOrderSchema>; // NEW Type
+export type UpdateChatOrderRequest = z.infer<typeof updateChatOrderSchema>; 
 export type InsertUser = { username: string; password: string };
 export type User = { id: string; username: string; password: string };
 
+// ==========================================
+// NEW NORMALIZED & CONSOLIDATED DB TABLES
+// ==========================================
+
+export const customersTable = pgTable("customers", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  phone: text("phone").unique(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const ordersTable = pgTable("orders", {
+  id: text("id").primaryKey(),
+  
+  // Foreign key linking to the customers table
+  customerId: text("customer_id").references(() => customersTable.id).notNull(),
+  
+  // Use a type field to distinguish between simple string extracts and full chat arrays
+  extractionType: text("extraction_type").notNull(), 
+  
+  items: jsonb("items").notNull(),
+  totalAmount: real("total_amount"),
+  currency: text("currency").default("INR"),
+  
+  deliveryDate: timestamp("delivery_date", { mode: 'string' }),
+  deliveryAddress: text("delivery_address"),
+  specialInstructions: text("special_instructions"),
+  
+  rawMessages: jsonb("raw_messages").notNull(),
+  confidence: text("confidence").notNull(),
+  status: text("status").default("pending").notNull(),
+  invoice: jsonb("invoice").$type<Invoice>(),
+  
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+
+
+// ==========================================
+// OLD TABLES (Commented out for migration reference)
+// ==========================================
+
+/*
 export const extractedOrdersTable = pgTable("extracted_orders", {
   id: text("id").primaryKey(),
   customerName: text("customer_name"),
@@ -113,18 +155,18 @@ export const extractedOrdersTable = pgTable("extracted_orders", {
   createdAt: text("created_at").notNull(),
 });
 
-// Define the Chat Orders table
 export const chatOrdersTable = pgTable("chat_orders", {
   id: text("id").primaryKey(),
   customer_name: text("customer_name"),
   items: jsonb("items").$type<ExtractedChatOrderItem[]>().notNull(),
   delivery_address: text("delivery_address"),
-  delivery_date: text("delivery_date"),
+  delivery_date: timestamp("delivery_date", { mode: 'string' }),
   special_instructions: text("special_instructions"),
   total: real("total"),
   confidence: text("confidence").notNull(),
   status: text("status").default("pending").notNull(),
-  created_at: text("created_at").notNull(),
+  created_at: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
   raw_messages: jsonb("raw_messages").$type<ChatMessage[]>().notNull(),
   invoice: jsonb("invoice").$type<Invoice>(),
 });
+*/
