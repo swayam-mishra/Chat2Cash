@@ -8,6 +8,7 @@ import { db } from "../config/db";
 import { sql } from "drizzle-orm";
 import { env } from "../config/env";
 import { logger } from "../middlewares/logger";
+import { getQueueHealth } from "../services/queueService";
 
 const router = Router();
 
@@ -17,7 +18,8 @@ router.get("/health", async (_req, res) => {
     timestamp: new Date().toISOString(),
     services: {
       database: "unknown",
-      anthropic: "unknown"
+      anthropic: "unknown",
+      queue: "unknown"
     }
   };
 
@@ -57,6 +59,17 @@ router.get("/health", async (_req, res) => {
   }
 
   const statusCode = healthStatus.status === "ok" ? 200 : 503;
+  
+  // 3. Check Queue Health
+  try {
+    const queueStats = await getQueueHealth();
+    healthStatus.services.queue = "connected";
+    healthStatus.queue = queueStats;
+  } catch (err) {
+    healthStatus.services.queue = "disconnected";
+    logger.warn("Health Check: Redis/Queue unreachable");
+  }
+
   res.status(statusCode).json(healthStatus);
 });
 
@@ -69,6 +82,14 @@ router.get("/orders/:id", generalLimiter, redactPII, orderController.getOrderByI
 router.post("/extract", extractLimiter, sanitizeInputs, orderController.extractOrder);
 router.post("/extract-order", extractLimiter, sanitizeInputs, orderController.extractChatOrder);
 router.post("/generate-invoice", extractLimiter, sanitizeInputs, invoiceController.generateInvoice);
+
+// Async Extraction (BullMQ Background Jobs) — returns 202 with job ID
+router.post("/async/extract", extractLimiter, sanitizeInputs, orderController.asyncExtractOrder);
+router.post("/async/extract-order", extractLimiter, sanitizeInputs, orderController.asyncExtractChatOrder);
+
+// Job Status & Queue Health
+router.get("/jobs/:id", generalLimiter, orderController.getJobStatusById);
+router.get("/queue/health", generalLimiter, orderController.getQueueStats);
 
 // Updates: Strict Rate Limit + Input Sanitization
 router.patch("/orders/:id/edit", extractLimiter, sanitizeInputs, orderController.editOrder);

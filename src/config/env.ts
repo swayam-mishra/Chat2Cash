@@ -18,6 +18,9 @@ const envSchema = z.object({
   DEFAULT_GST_NUMBER: z.string().default("22AAAAA0000A1Z5"),
   DEFAULT_BUSINESS_NAME: z.string().default("Chat2Cash Store"),
   
+  // Redis (for BullMQ async job queue)
+  REDIS_URL: z.string().url().default("redis://localhost:6379"),
+  
   // Storage (Placeholder for future S3 config)
   AWS_ACCESS_KEY_ID: z.string().optional(),
   AWS_SECRET_ACCESS_KEY: z.string().optional(),

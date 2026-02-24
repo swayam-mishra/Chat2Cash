@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import * as anthropicService from "../services/anthropicService";
 import { storage } from "../services/storageService";
+import { addExtractionJob, getJobStatus, getQueueHealth } from "../services/queueService";
 import { extractOrderRequestSchema, extractOrderFromChatRequestSchema, updateChatOrderSchema, ExtractedChatOrder } from "../schema";
 import { asyncHandler, AppError } from "../middlewares/errorHandler";
 
@@ -96,4 +97,60 @@ export const deleteOrder = asyncHandler(async (req: Request, res: Response) => {
   }
   
   res.json({ success: true, message: "Order deleted successfully" });
+});
+
+// ==========================================
+// ASYNC EXTRACTION (BullMQ Background Jobs)
+// ==========================================
+
+export const asyncExtractOrder = asyncHandler(async (req: Request, res: Response) => {
+  const { message } = extractOrderRequestSchema.parse(req.body);
+  const { webhookUrl } = req.body;
+
+  const jobId = await addExtractionJob({
+    type: "single_message",
+    message,
+    webhookUrl,
+  });
+
+  res.status(202).json({
+    status: "queued",
+    jobId,
+    message: "Order extraction queued for processing",
+    statusUrl: `/api/jobs/${jobId}`,
+  });
+});
+
+export const asyncExtractChatOrder = asyncHandler(async (req: Request, res: Response) => {
+  const { messages } = extractOrderFromChatRequestSchema.parse(req.body);
+  const { webhookUrl } = req.body;
+
+  const jobId = await addExtractionJob({
+    type: "chat_log",
+    messages,
+    webhookUrl,
+  });
+
+  res.status(202).json({
+    status: "queued",
+    jobId,
+    message: "Chat order extraction queued for processing",
+    statusUrl: `/api/jobs/${jobId}`,
+  });
+});
+
+export const getJobStatusById = asyncHandler(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const status = await getJobStatus(id);
+
+  if (!status) {
+    throw new AppError("Job not found", 404);
+  }
+
+  res.json(status);
+});
+
+export const getQueueStats = asyncHandler(async (_req: Request, res: Response) => {
+  const health = await getQueueHealth();
+  res.json(health);
 });

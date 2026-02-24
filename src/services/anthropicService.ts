@@ -113,8 +113,18 @@ async function extractWithTool(
       }
 
       if (attempt < MAX_RETRIES) {
-        const delay = calculateBackoff(attempt);
-        log(`Waiting ${Math.round(delay)}ms before retry...`, "anthropic");
+        let delay: number;
+
+        // OPTIMIZATION: Respect Retry-After header from 429 responses
+        if (isRateLimit && error.headers?.["retry-after"]) {
+          const retryAfterSec = Number(error.headers["retry-after"]);
+          delay = (isNaN(retryAfterSec) ? calculateBackoff(attempt) : retryAfterSec * 1000);
+          log(`Rate limited (429). Using Retry-After header: ${Math.round(delay)}ms`, "anthropic");
+        } else {
+          delay = calculateBackoff(attempt);
+          log(`${isRateLimit ? "Rate limited (429)" : "Server error"}. Backoff: ${Math.round(delay)}ms`, "anthropic");
+        }
+
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
