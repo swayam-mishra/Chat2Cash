@@ -4,10 +4,61 @@ import * as invoiceController from "../controllers/invoiceController";
 import { extractLimiter, generalLimiter } from "../middlewares/rateLimiter";
 import { sanitizeInputs } from "../middlewares/sanitizer";
 import { redactPII } from "../middlewares/piiRedactor";
+import { db } from "../config/db";
+import { sql } from "drizzle-orm";
+import { env } from "../config/env";
+import { logger } from "../middlewares/logger";
 
 const router = Router();
 
-router.get("/health", (_req, res) => res.json({ status: "Chat2Cash API Online" }));
+router.get("/health", async (_req, res) => {
+  const healthStatus: any = {
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    services: {
+      database: "unknown",
+      anthropic: "unknown"
+    }
+  };
+
+  // 1. Check Database
+  try {
+    await db.execute(sql`SELECT 1`);
+    healthStatus.services.database = "connected";
+  } catch (err) {
+    healthStatus.status = "error";
+    healthStatus.services.database = "disconnected";
+    logger.error({ err }, "Health Check: Database connection failed");
+  }
+
+  // 2. Check Anthropic Latency (Lightweight check)
+  const startTime = Date.now();
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000); // 3s timeout
+
+    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "HEAD", // Head request to check if endpoint is reachable
+        headers: { "x-api-key": env.ANTHROPIC_API_KEY },
+        signal: controller.signal
+    });
+    clearTimeout(timeout);
+    
+    healthStatus.latency_ms = Date.now() - startTime;
+    if (anthropicRes.status === 401) {
+      healthStatus.services.anthropic = "api_key_invalid";
+    } else {
+      // Any response (including 405) means the API is reachable
+      healthStatus.services.anthropic = "reachable";
+    }
+  } catch (err) {
+    healthStatus.services.anthropic = "unreachable";
+    logger.warn("Health Check: Anthropic API unreachable or timed out");
+  }
+
+  const statusCode = healthStatus.status === "ok" ? 200 : 503;
+  res.status(statusCode).json(healthStatus);
+});
 
 // Read Operations: General Rate Limit + PII Redaction
 router.get("/stats", generalLimiter, orderController.getStats);
