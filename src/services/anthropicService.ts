@@ -7,29 +7,27 @@ import dotenv from "dotenv";
 
 dotenv.config({ path: "../.env" });
 
-// NEW: Fail-fast validation for the API Key at startup
 if (!process.env.ANTHROPIC_API_KEY) {
   throw new Error("CRITICAL: ANTHROPIC_API_KEY environment variable is missing. The AI extraction service cannot start.");
 }
 
-// Updated to the valid standard models that support prompt caching and tool use
 const DEFAULT_MODEL_STR = "claude-3-5-sonnet-20241022";
 const CHAT_EXTRACT_MODEL = "claude-3-5-sonnet-20241022";
 
-const REQUEST_TIMEOUT_MS = 30000;
-const MAX_RETRIES = 1;
+const REQUEST_TIMEOUT_MS = 60000; // Increased to 60s for long context processing
+const MAX_RETRIES = 3;            // Increased retries for resilience
+const INITIAL_RETRY_DELAY = 2000; // Start with 2s delay
+const MAX_RETRY_DELAY = 10000;    // Cap delay at 10s
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
   timeout: REQUEST_TIMEOUT_MS,
 });
 
-// Utility: Sliding Window to prevent exceeding token limits on long chats
 function applySlidingWindow(messages: ChatMessage[], maxChars: number = 12000): ChatMessage[] {
   let currentCount = 0;
   const pruned: ChatMessage[] = [];
   
-  // Iterate backwards to keep the most recent messages (bottom of chat)
   for (let i = messages.length - 1; i >= 0; i--) {
     currentCount += messages[i].text.length;
     if (currentCount > maxChars) break;
@@ -39,7 +37,17 @@ function applySlidingWindow(messages: ChatMessage[], maxChars: number = 12000): 
   return pruned;
 }
 
-// Utility: Core tool invocation leveraging Prompt Caching 
+// OPTIMIZATION: Helper for exponential backoff with jitter
+// Prevents "thundering herd" problem when multiple requests fail simultaneously
+const calculateBackoff = (attempt: number): number => {
+  const baseDelay = Math.min(
+    MAX_RETRY_DELAY,
+    INITIAL_RETRY_DELAY * Math.pow(2, attempt)
+  );
+  const jitter = Math.random() * 1000; // Add 0-1000ms jitter
+  return baseDelay + jitter;
+};
+
 async function extractWithTool(
   model: string,
   systemPrompt: string,
@@ -53,7 +61,7 @@ async function extractWithTool(
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       if (attempt > 0) {
-        log(`Retry attempt ${attempt} for Claude API call`, "warn");
+        log(`Retry attempt ${attempt}/${MAX_RETRIES} for Claude API call`, "warn");
       }
 
       log(`Claude API call starting (model: ${model}, input: ${userContent.length} chars)`, "anthropic");
@@ -64,17 +72,19 @@ async function extractWithTool(
         max_tokens: 1024,
         system: [
           {
-            type: "text",
+            type: "text" as const,
             text: systemPrompt,
-            cache_control: { type: "ephemeral" } // Prompt Caching
-          }
+            // OPTIMIZATION: Prompt Caching
+            // Keeps the static system prompt hot in cache for 5 minutes
+            cache_control: { type: "ephemeral" } 
+          } as any,
         ],
         tools: [{
           name: toolName,
           description: "Record structured order details from the provided message/chat",
           input_schema: toolSchema
         }],
-        tool_choice: { type: "tool", name: toolName }, // Forces Claude to use this tool
+        tool_choice: { type: "tool", name: toolName },
         messages: [{ role: "user", content: userContent }],
       });
 
@@ -88,16 +98,30 @@ async function extractWithTool(
       log(`Claude API responded in ${elapsed}ms (usage: ${response.usage.input_tokens}in/${response.usage.output_tokens}out)`, "anthropic");
       
       return toolCall.input;
+
     } catch (error: any) {
       lastError = error;
       const elapsed = Date.now() - callStart;
+      
+      // OPTIMIZATION: Intelligent Error Handling
+      const isRateLimit = error.status === 429;
+      const isServerError = error.status >= 500;
+      const isClientError = error.status >= 400 && error.status < 500 && !isRateLimit;
+
       logError(
-        `Claude API call failed after ${elapsed}ms (attempt ${attempt + 1}/${MAX_RETRIES + 1}): ${error.message}`,
+        `Claude API call failed after ${elapsed}ms (attempt ${attempt + 1}): ${error.message}`,
         error instanceof Error ? error : undefined,
       );
 
+      // Fail fast on client errors (e.g. Invalid API Key, Bad Request)
+      if (isClientError) {
+        throw error;
+      }
+
       if (attempt < MAX_RETRIES) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const delay = calculateBackoff(attempt);
+        log(`Waiting ${Math.round(delay)}ms before retry...`, "anthropic");
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
   }
@@ -219,13 +243,12 @@ export async function extractOrderFromChat(messages: ChatMessage[]): Promise<Ext
       : "medium",
     status: "pending",
     created_at: new Date().toISOString(),
-    raw_messages: messages, // We preserve full original array in database
+    raw_messages: messages, 
   };
 
   return order;
 }
 
-// Implement Streaming extraction capability to report progress for long sequences
 export async function* streamExtractOrderFromChat(messages: ChatMessage[]) {
   const optimizedMessages = applySlidingWindow(messages);
   const conversationText = optimizedMessages.map((m) => `${m.sender}: ${m.text}`).join("\n");
@@ -236,10 +259,10 @@ export async function* streamExtractOrderFromChat(messages: ChatMessage[]) {
     max_tokens: 1024,
     system: [
       {
-        type: "text",
+        type: "text" as const,
         text: systemPrompt,
         cache_control: { type: "ephemeral" }
-      }
+      } as any,
     ],
     messages: [{ role: "user", content: conversationText }],
     stream: true,
