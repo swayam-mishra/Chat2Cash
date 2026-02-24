@@ -6,14 +6,31 @@ const SENSITIVE_KEYS = new Set([
   "deliveryAddress", "delivery_address", "gst_number"
 ]);
 
+// Regex for Indian Mobile Numbers (covers +91, 91, or just 10 digits starting with 6-9)
+const PHONE_REGEX = /(?:\+91[\-\s]?)?[6-9]\d{9}/g;
+
+// Basic Email Regex
+const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+
 function maskPII(obj: any): any {
   if (!obj || typeof obj !== "object") return obj;
   if (Array.isArray(obj)) return obj.map(maskPII);
   
   const masked: Record<string, any> = {};
   for (const [key, value] of Object.entries(obj)) {
+    // 1. Key-based Redaction (Fastest)
     if (SENSITIVE_KEYS.has(key)) {
       masked[key] = "***REDACTED***";
+      continue;
+    } 
+    
+    // 2. Value-based Scanning (Deep Scan)
+    if (typeof value === "string") {
+      // Use .replace() directly — it's a no-op if no match, and avoids
+      // the lastIndex statefulness bug with .test() + .replace() on /g regexes
+      masked[key] = value
+        .replace(PHONE_REGEX, "[PHONE REMOVED]")
+        .replace(EMAIL_REGEX, "[EMAIL REMOVED]");
     } else if (typeof value === "object") {
       masked[key] = maskPII(value);
     } else {
@@ -24,19 +41,13 @@ function maskPII(obj: any): any {
 }
 
 export const redactPII = (req: Request, res: Response, next: NextFunction) => {
-  // In a real app, this would come from req.user (JWT/Session)
-  // For now, we simulate role checks via a header
   const userRole = (req.headers['x-user-role'] as string) || 'guest';
-  
-  // Roles permitted to see full PII
   const FULL_ACCESS_ROLES = ['admin', 'manager', 'owner'];
   
-  // If user has full access, skip redaction
   if (FULL_ACCESS_ROLES.includes(userRole)) {
     return next();
   }
 
-  // Intercept the JSON response to redact PII for restricted roles
   const originalJson = res.json;
   res.json = function (body) {
     const safeBody = maskPII(body);

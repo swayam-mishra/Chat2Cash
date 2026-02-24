@@ -3,11 +3,8 @@ import { Request, Response, NextFunction } from "express";
 function escapeHtml(text: string): string {
   if (typeof text !== 'string') return text;
   return text
-    .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+    .replace(/>/g, "&gt;");
 }
 
 function sanitizeObject(obj: any): any {
