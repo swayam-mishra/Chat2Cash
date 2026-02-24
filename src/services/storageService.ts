@@ -1,7 +1,7 @@
 import { ExtractedOrder, ExtractedChatOrder, Invoice } from "../schema";
 import { db } from "../config/db";
 import { ordersTable, customersTable } from "../schema";
-import { eq, desc, max, count, sum, and } from "drizzle-orm"; // CHANGED: Added count, sum, and
+import { eq, desc, max, count, sum, and, isNull } from "drizzle-orm"; 
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -11,7 +11,6 @@ export interface IStorage {
   updateOrderStatus(id: string, status: ExtractedOrder["status"]): Promise<ExtractedOrder | undefined>;
   deleteOrder(id: string): Promise<boolean>;
   
-  // CHANGED: Updated signatures for pagination and aggregation
   getChatOrders(limit?: number, offset?: number): Promise<ExtractedChatOrder[]>;
   getChatOrder(id: string): Promise<ExtractedChatOrder | undefined>;
   addChatOrder(order: ExtractedChatOrder): Promise<ExtractedChatOrder>;
@@ -19,7 +18,6 @@ export interface IStorage {
   updateChatOrderDetails(id: string, updates: Partial<ExtractedChatOrder>): Promise<ExtractedChatOrder | undefined>;
   generateAndAttachInvoice(orderId: string, generateInvoiceFn: (order: ExtractedChatOrder, nextSequence: number) => Invoice): Promise<ExtractedChatOrder | undefined>;
   
-  // NEW: Added aggregation method signatures
   getChatOrdersCount(statusFilter?: string): Promise<number>;
   getTotalRevenue(): Promise<number>;
 }
@@ -68,7 +66,10 @@ export class DatabaseStorage implements IStorage {
     const results = await db.select({ order: ordersTable, customer: customersTable })
       .from(ordersTable)
       .innerJoin(customersTable, eq(ordersTable.customerId, customersTable.id))
-      .where(eq(ordersTable.extractionType, 'single_message'))
+      .where(and(
+        eq(ordersTable.extractionType, 'single_message'),
+        isNull(ordersTable.deletedAt) // Soft Delete Check
+      ))
       .orderBy(desc(ordersTable.createdAt));
 
     return results.map(row => mapToExtractedOrder(row.order, row.customer));
@@ -78,7 +79,10 @@ export class DatabaseStorage implements IStorage {
     const results = await db.select({ order: ordersTable, customer: customersTable })
       .from(ordersTable)
       .innerJoin(customersTable, eq(ordersTable.customerId, customersTable.id))
-      .where(eq(ordersTable.id, id));
+      .where(and(
+        eq(ordersTable.id, id),
+        isNull(ordersTable.deletedAt) // Soft Delete Check
+      ));
 
     if (results.length === 0) return undefined;
     return mapToExtractedOrder(results[0].order, results[0].customer);
@@ -101,7 +105,7 @@ export class DatabaseStorage implements IStorage {
         totalAmount: order.totalAmount,
         currency: order.currency,
         specialInstructions: order.notes,
-        rawMessages: order.rawMessage, // store as text or array internally
+        rawMessages: order.rawMessage,
         confidence: String(order.confidence),
         status: order.status,
         createdAt: order.createdAt,
@@ -115,7 +119,10 @@ export class DatabaseStorage implements IStorage {
     return await db.transaction(async (tx) => {
       const [updatedOrder] = await tx.update(ordersTable)
         .set({ status })
-        .where(eq(ordersTable.id, id))
+        .where(and(
+          eq(ordersTable.id, id),
+          isNull(ordersTable.deletedAt)
+        ))
         .returning();
 
       if (!updatedOrder) return undefined;
@@ -126,7 +133,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteOrder(id: string): Promise<boolean> {
-    const [deleted] = await db.delete(ordersTable).where(eq(ordersTable.id, id)).returning();
+    // OPTIMIZATION: Soft Delete Implementation
+    const [deleted] = await db.update(ordersTable)
+      .set({ deletedAt: new Date().toISOString() })
+      .where(eq(ordersTable.id, id))
+      .returning();
+      
     return !!deleted;
   }
 
@@ -134,12 +146,14 @@ export class DatabaseStorage implements IStorage {
   // CHAT ORDERS (chatOrders)
   // ==========================================
 
-  // CHANGED: Added limit and offset for pagination
   async getChatOrders(limit: number = 50, offset: number = 0): Promise<ExtractedChatOrder[]> {
     const results = await db.select({ order: ordersTable, customer: customersTable })
       .from(ordersTable)
       .innerJoin(customersTable, eq(ordersTable.customerId, customersTable.id))
-      .where(eq(ordersTable.extractionType, 'chat_log'))
+      .where(and(
+        eq(ordersTable.extractionType, 'chat_log'),
+        isNull(ordersTable.deletedAt) // Soft Delete Check
+      ))
       .orderBy(desc(ordersTable.createdAt))
       .limit(limit)
       .offset(offset);
@@ -147,9 +161,12 @@ export class DatabaseStorage implements IStorage {
     return results.map(row => mapToExtractedChatOrder(row.order, row.customer));
   }
 
-  // NEW: Optimized count query
   async getChatOrdersCount(statusFilter?: string): Promise<number> {
-    const conditions = [eq(ordersTable.extractionType, 'chat_log')];
+    const conditions = [
+      eq(ordersTable.extractionType, 'chat_log'),
+      isNull(ordersTable.deletedAt) // Exclude soft deleted
+    ];
+    
     if (statusFilter) {
       conditions.push(eq(ordersTable.status, statusFilter));
     }
@@ -161,11 +178,13 @@ export class DatabaseStorage implements IStorage {
     return result[0].value;
   }
 
-  // NEW: Optimized revenue sum query
   async getTotalRevenue(): Promise<number> {
     const result = await db.select({ value: sum(ordersTable.totalAmount) })
       .from(ordersTable)
-      .where(eq(ordersTable.extractionType, 'chat_log'));
+      .where(and(
+        eq(ordersTable.extractionType, 'chat_log'),
+        isNull(ordersTable.deletedAt) // Exclude soft deleted
+      ));
       
     return Number(result[0].value || 0);
   }
@@ -174,7 +193,10 @@ export class DatabaseStorage implements IStorage {
     const results = await db.select({ order: ordersTable, customer: customersTable })
       .from(ordersTable)
       .innerJoin(customersTable, eq(ordersTable.customerId, customersTable.id))
-      .where(eq(ordersTable.id, id));
+      .where(and(
+        eq(ordersTable.id, id),
+        isNull(ordersTable.deletedAt)
+      ));
 
     if (results.length === 0) return undefined;
     return mapToExtractedChatOrder(results[0].order, results[0].customer);
@@ -211,7 +233,10 @@ export class DatabaseStorage implements IStorage {
     return await db.transaction(async (tx) => {
       const [updatedOrder] = await tx.update(ordersTable)
         .set({ invoice })
-        .where(eq(ordersTable.id, orderId))
+        .where(and(
+          eq(ordersTable.id, orderId),
+          isNull(ordersTable.deletedAt)
+        ))
         .returning();
 
       if (!updatedOrder) return undefined;
@@ -223,7 +248,6 @@ export class DatabaseStorage implements IStorage {
 
   async updateChatOrderDetails(id: string, updates: Partial<ExtractedChatOrder>): Promise<ExtractedChatOrder | undefined> {
     return await db.transaction(async (tx) => {
-      // Map frontend updates to database columns
       const dbUpdates: any = {};
       if (updates.items) dbUpdates.items = updates.items;
       if (updates.total !== undefined) dbUpdates.totalAmount = updates.total;
@@ -233,12 +257,14 @@ export class DatabaseStorage implements IStorage {
 
       const [updatedOrder] = await tx.update(ordersTable)
         .set(dbUpdates)
-        .where(eq(ordersTable.id, id))
+        .where(and(
+          eq(ordersTable.id, id),
+          isNull(ordersTable.deletedAt)
+        ))
         .returning();
 
       if (!updatedOrder) return undefined;
 
-      // Update customer name if provided
       const [customer] = await tx.select().from(customersTable).where(eq(customersTable.id, updatedOrder.customerId));
       
       if (updates.customer_name && updates.customer_name !== customer.name) {
@@ -257,31 +283,30 @@ export class DatabaseStorage implements IStorage {
   // TRANSACTIONAL BUSINESS LOGIC
   // ==========================================
 
-  // NEW: Production-ready transaction ensuring secure, sequential invoice IDs
   async generateAndAttachInvoice(orderId: string, generateInvoiceFn: (order: ExtractedChatOrder, nextSequence: number) => Invoice): Promise<ExtractedChatOrder | undefined> {
     return await db.transaction(async (tx) => {
-      // 1. Fetch the joined order data inside the transaction
       const result = await tx.select({ order: ordersTable, customer: customersTable })
         .from(ordersTable)
         .innerJoin(customersTable, eq(ordersTable.customerId, customersTable.id))
-        .where(eq(ordersTable.id, orderId));
+        .where(and(
+          eq(ordersTable.id, orderId),
+          isNull(ordersTable.deletedAt)
+        ));
 
       if (result.length === 0) {
         tx.rollback();
-        return undefined; // Order not found
+        return undefined;
       }
 
-      // 2. Safely compute the next invoice sequence number using a database lock/max
+      // Safe to query max sequence; deleted orders still consume a sequence number to prevent reuse
       const maxSeqResult = await tx.select({ maxSeq: max(ordersTable.invoiceSequence) }).from(ordersTable);
       const nextSequenceNumber = (maxSeqResult[0]?.maxSeq || 0) + 1;
 
       const { order: dbOrder, customer: dbCustomer } = result[0];
       const chatOrder = mapToExtractedChatOrder(dbOrder, dbCustomer);
       
-      // 3. Generate the invoice data injecting the secure sequence number
       const invoiceData = generateInvoiceFn(chatOrder, nextSequenceNumber);
 
-      // 4. Atomically update the invoice field, save the sequence integer, and confirm status
       const [updatedOrder] = await tx.update(ordersTable)
         .set({ 
           invoice: invoiceData,

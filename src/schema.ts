@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { pgTable, text, real, jsonb, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, real, jsonb, timestamp, integer, index } from "drizzle-orm/pg-core";
 
 export const orderItemSchema = z.object({
   name: z.string(),
@@ -36,7 +36,6 @@ export const extractOrderFromChatRequestSchema = z.object({
   messages: z.array(chatMessageSchema).min(1, "At least one message is required"),
 });
 
-// CHANGED: Added input boundaries to prevent negative numbers or empty strings
 export const extractedChatOrderItemSchema = z.object({
   product_name: z.string().min(1, "Product name cannot be empty"),
   quantity: z.number().positive("Quantity must be greater than 0"),
@@ -57,7 +56,6 @@ export const extractedChatOrderSchema = z.object({
   raw_messages: z.array(chatMessageSchema),
 });
 
-// CHANGED: Added boundary validations and .strict() to prevent payload pollution
 export const updateChatOrderSchema = z.object({
   customer_name: z.string().min(1, "Customer name cannot be empty").nullable().optional(),
   items: z.array(extractedChatOrderItemSchema).optional(),
@@ -115,10 +113,8 @@ export const customersTable = pgTable("customers", {
 export const ordersTable = pgTable("orders", {
   id: text("id").primaryKey(),
   
-  // Foreign key linking to the customers table
   customerId: text("customer_id").references(() => customersTable.id).notNull(),
   
-  // Use a type field to distinguish between simple string extracts and full chat arrays
   extractionType: text("extraction_type").notNull(), 
   
   items: jsonb("items").notNull(),
@@ -136,40 +132,19 @@ export const ordersTable = pgTable("orders", {
 
   invoiceSequence: integer("invoice_sequence"),
   
+  // OPTIMIZATION: Soft Delete Column
+  deletedAt: timestamp("deleted_at", { mode: 'string' }),
+  
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+}, (table) => {
+  return {
+    // OPTIMIZATION: B-Tree Indexes for frequent lookups
+    statusIdx: index("status_idx").on(table.status),
+    extractionTypeIdx: index("extraction_type_idx").on(table.extractionType),
+    customerIdIdx: index("customer_id_idx").on(table.customerId),
+    
+    // OPTIMIZATION: GIN Indexes for JSONB searching
+    itemsGinIdx: index("items_gin_idx").using("gin", table.items),
+    rawMessagesGinIdx: index("raw_messages_gin_idx").using("gin", table.rawMessages),
+  };
 });
-
-// ==========================================
-// OLD TABLES (Commented out for migration reference)
-// ==========================================
-
-/*
-export const extractedOrdersTable = pgTable("extracted_orders", {
-  id: text("id").primaryKey(),
-  customerName: text("customer_name"),
-  customerPhone: text("customer_phone"),
-  items: jsonb("items").$type<OrderItem[]>().notNull(),
-  totalAmount: real("total_amount"),
-  currency: text("currency").default("INR"),
-  notes: text("notes"),
-  rawMessage: text("raw_message").notNull(),
-  confidence: real("confidence").notNull(),
-  status: text("status").default("pending").notNull(),
-  createdAt: text("created_at").notNull(),
-});
-
-export const chatOrdersTable = pgTable("chat_orders", {
-  id: text("id").primaryKey(),
-  customer_name: text("customer_name"),
-  items: jsonb("items").$type<ExtractedChatOrderItem[]>().notNull(),
-  delivery_address: text("delivery_address"),
-  delivery_date: timestamp("delivery_date", { mode: 'string' }),
-  special_instructions: text("special_instructions"),
-  total: real("total"),
-  confidence: text("confidence").notNull(),
-  status: text("status").default("pending").notNull(),
-  created_at: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
-  raw_messages: jsonb("raw_messages").$type<ChatMessage[]>().notNull(),
-  invoice: jsonb("invoice").$type<Invoice>(),
-});
-*/
