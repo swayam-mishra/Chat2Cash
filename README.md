@@ -5,8 +5,6 @@
 # 🏆 Build India Hackathon Winner (1st Place)
 **Organized by Anthropic × Replit × Lightspeed**
 
-### 🥇 First Prize | $2,500 Cash | $14,000+ in Developer Credits
-
 </div>
 
 ---
