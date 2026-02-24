@@ -52,7 +52,6 @@ function mapToExtractedChatOrder(orderRow: any, customerRow: any): ExtractedChat
     status: orderRow.status,
     created_at: orderRow.createdAt,
     raw_messages: orderRow.rawMessages,
-    // @ts-ignore
     invoice: orderRow.invoice || undefined,
   };
 }
@@ -254,6 +253,7 @@ export class DatabaseStorage implements IStorage {
       if (updates.delivery_address !== undefined) dbUpdates.deliveryAddress = updates.delivery_address;
       if (updates.delivery_date !== undefined) dbUpdates.deliveryDate = updates.delivery_date;
       if (updates.special_instructions !== undefined) dbUpdates.specialInstructions = updates.special_instructions;
+      if (updates.status !== undefined) dbUpdates.status = updates.status;
 
       const [updatedOrder] = await tx.update(ordersTable)
         .set(dbUpdates)

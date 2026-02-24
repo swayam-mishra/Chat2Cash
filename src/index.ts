@@ -1,36 +1,26 @@
-import { Router } from "express";
-import routes from "./routes/index";
-import { db } from "./config/db";
-import { sql } from "drizzle-orm";
+import "./config/env"; // OPTIMIZATION: Validate ENV before anything else
+import express from "express";
+import cors from "cors";
+import router from "./routes";
+import { log } from "./middlewares/logger";
+import { globalErrorHandler } from "./middlewares/errorHandler";
+import { env } from "./config/env";
 
-const router = Router();
+const app = express();
+const PORT = env.PORT; // Type-safe access
 
-// CHANGED: True readiness health check
-router.get("/health", async (_req, res) => {
-  try {
-    // 1. Check Database Connectivity
-    await db.execute(sql`SELECT 1`);
-    
-    // 2. Check AI Service Readiness
-    const isAnthropicConfigured = !!process.env.ANTHROPIC_API_KEY;
+app.use(cors());
+app.use(express.json());
 
-    res.status(200).json({ 
-      status: "ok", 
-      database: "connected",
-      ai_service: isAnthropicConfigured ? "ready" : "missing_key",
-      timestamp: new Date().toISOString()
-    });
-  } catch (error: any) {
-    res.status(503).json({ 
-      status: "error", 
-      database: "disconnected",
-      message: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
+// Request logging happens inside routes or specific middlewares now if needed
+// or you can add app.use(requestLogger) here
+
+app.use("/api", router);
+
+// OPTIMIZATION: Centralized Error Handling
+app.use(globalErrorHandler);
+
+app.listen(PORT, () => {
+  log(`Server running on http://localhost:${PORT}`, "info");
+  log(`Environment: ${env.NODE_ENV}`, "info");
 });
-
-// Use the routes with sanitization, PII redaction, and rate limiting
-router.use(routes);
-
-export default router;

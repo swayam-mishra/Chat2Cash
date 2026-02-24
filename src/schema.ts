@@ -42,29 +42,6 @@ export const extractedChatOrderItemSchema = z.object({
   price: z.number().min(0, "Price cannot be negative").nullable().optional(),
 });
 
-export const extractedChatOrderSchema = z.object({
-  id: z.string(),
-  customer_name: z.string().nullable().optional(),
-  items: z.array(extractedChatOrderItemSchema),
-  delivery_address: z.string().nullable().optional(),
-  delivery_date: z.string().nullable().optional(),
-  special_instructions: z.string().nullable().optional(),
-  total: z.number().nullable().optional(),
-  confidence: z.enum(["high", "medium", "low"]),
-  status: z.string().default("pending"),
-  created_at: z.string(),
-  raw_messages: z.array(chatMessageSchema),
-});
-
-export const updateChatOrderSchema = z.object({
-  customer_name: z.string().min(1, "Customer name cannot be empty").nullable().optional(),
-  items: z.array(extractedChatOrderItemSchema).optional(),
-  delivery_address: z.string().nullable().optional(),
-  delivery_date: z.string().nullable().optional(),
-  special_instructions: z.string().nullable().optional(),
-  total: z.number().min(0, "Total cannot be negative").nullable().optional(),
-}).strict("Request body contains invalid or restricted fields.");
-
 export const invoiceItemSchema = z.object({
   product_name: z.string(),
   quantity: z.number(),
@@ -85,6 +62,30 @@ export const invoiceSchema = z.object({
   business_name: z.string(),
   gst_number: z.string(),
 });
+
+export const extractedChatOrderSchema = z.object({
+  id: z.string(),
+  customer_name: z.string().nullable().optional(),
+  items: z.array(extractedChatOrderItemSchema),
+  delivery_address: z.string().nullable().optional(),
+  delivery_date: z.string().nullable().optional(),
+  special_instructions: z.string().nullable().optional(),
+  total: z.number().nullable().optional(),
+  confidence: z.enum(["high", "medium", "low"]),
+  status: z.string().default("pending"),
+  created_at: z.string(),
+  raw_messages: z.array(chatMessageSchema),
+  invoice: invoiceSchema.nullable().optional(),
+});
+
+export const updateChatOrderSchema = z.object({
+  customer_name: z.string().min(1, "Customer name cannot be empty").nullable().optional(),
+  items: z.array(extractedChatOrderItemSchema).optional(),
+  delivery_address: z.string().nullable().optional(),
+  delivery_date: z.string().nullable().optional(),
+  special_instructions: z.string().nullable().optional(),
+  total: z.number().min(0, "Total cannot be negative").nullable().optional(),
+}).strict("Request body contains invalid or restricted fields.");
 
 export type Invoice = z.infer<typeof invoiceSchema>;
 export type InvoiceItem = z.infer<typeof invoiceItemSchema>;

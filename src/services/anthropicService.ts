@@ -3,13 +3,7 @@ import { randomUUID } from "crypto";
 import type { ExtractedOrder, ChatMessage, ExtractedChatOrder } from "../schema";
 import { log, logError } from "../middlewares/logger";
 import { getPrompt } from "./promptManager";
-import dotenv from "dotenv";
-
-dotenv.config({ path: "../.env" });
-
-if (!process.env.ANTHROPIC_API_KEY) {
-  throw new Error("CRITICAL: ANTHROPIC_API_KEY environment variable is missing. The AI extraction service cannot start.");
-}
+import { env } from "../config/env";
 
 const DEFAULT_MODEL_STR = "claude-3-5-sonnet-20241022";
 const CHAT_EXTRACT_MODEL = "claude-3-5-sonnet-20241022";
@@ -20,7 +14,7 @@ const INITIAL_RETRY_DELAY = 2000; // Start with 2s delay
 const MAX_RETRY_DELAY = 10000;    // Cap delay at 10s
 
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+  apiKey: env.ANTHROPIC_API_KEY,
   timeout: REQUEST_TIMEOUT_MS,
 });
 

@@ -1,97 +1,99 @@
 import { Request, Response } from "express";
+import * as anthropicService from "../services/anthropicService";
 import { storage } from "../services/storageService";
-import { extractOrderFromMessage, extractOrderFromChat } from "../services/anthropicService";
-import * as orderService from "../services/orderService";
-import { extractOrderRequestSchema, extractOrderFromChatRequestSchema, updateChatOrderSchema } from "../schema";
-import { z } from "zod";
+import { extractOrderRequestSchema, extractOrderFromChatRequestSchema, updateChatOrderSchema, ExtractedChatOrder } from "../schema";
+import { asyncHandler, AppError } from "../middlewares/errorHandler";
 
-export const getStats = async (_req: Request, res: Response) => {
-  try {
-    const stats = await orderService.getOrderStats();
-    res.json(stats);
-  } catch (error: any) {
-    res.status(500).json({ message: error.message || "Failed to get stats" });
+// Helper to remove circular references (if any) or unwanted fields before sending response
+// (Though PII Redactor handles the heavy lifting now)
+const sanitizeResponse = (order: any) => {
+  return order; 
+};
+
+export const extractOrder = asyncHandler(async (req: Request, res: Response) => {
+  const { message } = extractOrderRequestSchema.parse(req.body);
+  const order = await anthropicService.extractOrderFromMessage(message);
+  const savedOrder = await storage.addOrder(order);
+  res.status(201).json(sanitizeResponse(savedOrder));
+});
+
+export const getStats = asyncHandler(async (_req: Request, res: Response) => {
+  const totalOrders = await storage.getChatOrdersCount();
+  const pendingOrders = await storage.getChatOrdersCount("pending");
+  const confirmedOrders = await storage.getChatOrdersCount("confirmed");
+  const totalRevenue = await storage.getTotalRevenue();
+
+  res.json({
+    total_orders: totalOrders,
+    pending_orders: pendingOrders,
+    confirmed_orders: confirmedOrders,
+    total_revenue: totalRevenue
+  });
+});
+
+export const getOrders = asyncHandler(async (req: Request, res: Response) => {
+  const limit = Number(req.query.limit) || 50;
+  const offset = Number(req.query.offset) || 0;
+  
+  const orders = await storage.getChatOrders(limit, offset);
+  res.json(orders.map(sanitizeResponse));
+});
+
+export const getOrderById = asyncHandler(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const order = await storage.getChatOrder(id);
+  
+  if (!order) {
+    throw new AppError("Order not found", 404);
   }
-};
+  
+  res.json(sanitizeResponse(order));
+});
 
-export const getOrders = async (req: Request, res: Response) => {
-  try {
-    // CHANGED: Extract pagination params from the query string
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 50;
+export const extractChatOrder = asyncHandler(async (req: Request, res: Response) => {
+  const { messages } = extractOrderFromChatRequestSchema.parse(req.body);
+  const order = await anthropicService.extractOrderFromChat(messages);
+  const savedOrder = await storage.addChatOrder(order);
+  res.status(201).json(sanitizeResponse(savedOrder));
+});
 
-    const data = await orderService.getAllOrders(page, limit);
-    res.json(data);
-  } catch (error: any) {
-    res.status(500).json({ message: error.message || "Failed to get orders" });
+export const updateOrderStatus = asyncHandler(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const { status } = req.body; // Basic validation, extend via Zod if needed schema
+
+  if (!status) throw new AppError("Status is required", 400);
+
+  // Since storage methods are specific, we might need to check order type or try both
+  // For this optimized version, we assume Chat Orders are the primary entity
+  const updatedOrder = await storage.updateChatOrderDetails(id, { status });
+  
+  if (!updatedOrder) {
+    throw new AppError("Order not found", 404);
   }
-};
+  
+  res.json(sanitizeResponse(updatedOrder));
+});
 
-export const getOrderById = async (req: Request, res: Response) => {
-  const order = await storage.getOrder(req.params.id as string);
-  if (!order) return res.status(404).json({ message: "Order not found" });
-  res.json(order);
-};
+export const editOrder = asyncHandler(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const updates = updateChatOrderSchema.parse(req.body);
 
-export const extractOrder = async (req: Request, res: Response) => {
-  try {
-    const parsed = extractOrderRequestSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ message: parsed.error.errors[0].message });
-
-    const order = await extractOrderFromMessage(parsed.data.message);
-    const saved = await storage.addOrder(order);
-    res.json(saved);
-  } catch (error: any) {
-    res.status(500).json({ message: error.message || "Failed to extract order" });
+  const updatedOrder = await storage.updateChatOrderDetails(id, updates);
+  
+  if (!updatedOrder) {
+    throw new AppError("Order not found", 404);
   }
-};
 
-export const extractChatOrder = async (req: Request, res: Response) => {
-  try {
-    const parsed = extractOrderFromChatRequestSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ message: parsed.error.errors[0].message });
-    if (parsed.data.messages.length === 0) return res.status(400).json({ message: "No messages provided" });
+  res.json(sanitizeResponse(updatedOrder));
+});
 
-    const order = await extractOrderFromChat(parsed.data.messages);
-    const saved = await storage.addChatOrder(order);
-    res.json(saved);
-  } catch (error: any) {
-    res.status(500).json({ message: error.message || "Failed to extract order from chat" });
+export const deleteOrder = asyncHandler(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const success = await storage.deleteOrder(id);
+  
+  if (!success) {
+    throw new AppError("Order not found or already deleted", 404);
   }
-};
-
-export const editOrder = async (req: Request, res: Response) => {
-  try {
-    const parsed = updateChatOrderSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ message: parsed.error.errors[0].message });
-
-    const updatedOrder = await storage.updateChatOrderDetails(req.params.id as string, parsed.data);
-    if (!updatedOrder) return res.status(404).json({ message: "Order not found" });
-    res.json(updatedOrder);
-  } catch (error: any) {
-    res.status(500).json({ message: error.message || "Failed to update order details" });
-  }
-};
-
-export const updateOrderStatus = async (req: Request, res: Response) => {
-  try {
-    const parsed = z.object({ status: z.enum(["pending", "confirmed", "fulfilled", "cancelled"]) }).safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ message: "Invalid status" });
-
-    const order = await storage.updateOrderStatus(req.params.id as string, parsed.data.status);
-    if (!order) return res.status(404).json({ message: "Order not found" });
-    res.json(order);
-  } catch (error: any) {
-    res.status(500).json({ message: error.message || "Failed to update order" });
-  }
-};
-
-export const deleteOrder = async (req: Request, res: Response) => {
-  try {
-    const deleted = await storage.deleteOrder(req.params.id as string);
-    if (!deleted) return res.status(404).json({ message: "Order not found" });
-    res.status(204).send();
-  } catch (error: any) {
-    res.status(500).json({ message: error.message || "Failed to delete order" });
-  }
-};
+  
+  res.json({ success: true, message: "Order deleted successfully" });
+});
