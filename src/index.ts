@@ -1,6 +1,5 @@
 import { Router } from "express";
-import * as orderController from "./controllers/orderController";
-import * as invoiceController from "./controllers/invoiceController";
+import routes from "./routes/index";
 import { db } from "./config/db";
 import { sql } from "drizzle-orm";
 
@@ -31,14 +30,7 @@ router.get("/health", async (_req, res) => {
   }
 });
 
-router.get("/stats", orderController.getStats);
-router.get("/orders", orderController.getOrders);
-router.get("/orders/:id", orderController.getOrderById);
-router.post("/extract", orderController.extractOrder);
-router.post("/extract-order", orderController.extractChatOrder);
-router.patch("/orders/:id/edit", orderController.editOrder);
-router.patch("/orders/:id", orderController.updateOrderStatus);
-router.delete("/orders/:id", orderController.deleteOrder);
-router.post("/generate-invoice", invoiceController.generateInvoice);
+// Use the routes with sanitization, PII redaction, and rate limiting
+router.use(routes);
 
 export default router;

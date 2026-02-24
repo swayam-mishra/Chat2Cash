@@ -3,7 +3,8 @@ import { Request, Response, NextFunction } from "express";
 // NEW: Define keys that contain PII
 const SENSITIVE_KEYS = new Set([
   "customerName", "customerPhone", "customer_name", 
-  "customer_phone", "phone", "deliveryAddress", "delivery_address"
+  "customer_phone", "phone", "deliveryAddress", "delivery_address",
+  "gst_number"
 ]);
 
 // NEW: Helper function to recursively mask PII
