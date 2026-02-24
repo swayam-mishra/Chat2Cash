@@ -1,177 +1,173 @@
+![Build India Winner](Won_Build_India_Anthropic_X_Replit_X_Lightspeed.jpg)
+
+<div align="center">
+
+# 🏆 Build India Hackathon Winner (1st Place)
+**Organized by Anthropic × Replit × Lightspeed**
+
+### 🥇 First Prize | $2,500 Cash | $14,000+ in Developer Credits
+
+</div>
+
+---
+
 # Chat2Cash 
 
 > **AI-powered revenue recovery system for India's WhatsApp-first businesses.**
 > 
-> _Transforming messy chat logs into structured orders, invoices, and business intelligence._
+> _Transforming messy "Hinglish" chat logs into structured orders, invoices, and actionable business intelligence._
 
-## The Story Behind Chat2Cash
+## The Story
 
 **60 million SMBs in India run their businesses on WhatsApp.** But WhatsApp is a chat app, not an operating system.
 
 I built this project watching my mother run her clothing business. Every day, she would lose 10-15% of her potential revenue because orders got buried in chat threads, follow-ups were forgotten, and payments were missed. Manual entry into Excel at 11 PM was the only solution—until now.
 
-**Chat2Cash is an AI operations layer that sits on top of WhatsApp.** It automatically reads messy "Hinglish" conversations, extracts structured order details, and generates GST-compliant invoices in one click.
+**Chat2Cash is an AI operations layer that sits on top of WhatsApp.** It automatically reads messy conversations, extracts structured order details, handles inventory queries, and generates GST-compliant invoices in one click.
 
 ---
 
-## Features
+## Key Features
 
-### 1. AI Order Extraction
+### Advanced AI Extraction (Claude 3.5 Sonnet)
+- **Hinglish Mastery**: Understands "2 kilo aaloo", "bhaiya red wala dikhao", and mixed-language intents.
+- **Context Aware**: Distinguishes between inquiries ("price kya hai?") and confirmed orders ("book kar do").
+- **Smart Parsing**: Extracts items, quantities, units, delivery dates, and special instructions from unstructured text.
 
-- **Multilingual Support**: Understands English, Hindi, and "Hinglish" (e.g., _"2 kilo aloo"_).
-    
-- **Context Aware**: Distinguishes between polite addresses ("Bhaiya", "Didi") and actual customer names.
-    
-- **Smart Parsing**: Extracts items, quantities, units, and delivery dates from unstructured text.
-    
+### Enterprise-Grade Architecture
+- **Async Processing**: Uses **BullMQ & Redis** to handle high-volume chat logs without blocking the main thread.
+- **Robust Data Layer**: Built on **PostgreSQL** with **Drizzle ORM** for type-safe, normalized data storage.
+- **Security First**: 
+    - **PII Redaction Middleware**: Automatically masks phone numbers and names in logs/responses for privacy.
+    - **Input Sanitization**: Prevents injection attacks.
+    - **Rate Limiting**: Strict limits for AI endpoints to prevent abuse/billing spikes.
 
-### 2. Instant Invoicing
+### Instant Invoicing
+- **One-Click Generation**: Converts chat data into professional PDF invoices using `PDFKit`.
+- **GST Compliant**: Automatically calculates CGST/SGST/IGST breakdowns.
+- **Sequential Numbering**: Manages invoice sequences automatically.
 
-- **One-Click Generation**: Converts extracted chat data into professional invoices.
-    
-- **GST Compliant**: Automatically calculates CGST/SGST breakdowns.
-    
-- **Shareable**: Generates formats ready to be sent back to the customer on WhatsApp.
-    
-
-### 3. Business Dashboard
-
-- **Revenue Tracking**: Real-time view of daily/weekly sales.
-    
-- **Payment Status**: Track Pending vs. Paid orders to prevent revenue leakage.
-    
-- **Recent Activity**: A clear feed of all incoming orders and their fulfillment status.
-    
+### Business Health Checks
+- **Real-time Stats**: Track total revenue, pending orders, and conversion rates.
+- **System Health**: Dedicated `/health` endpoint monitoring Database, Redis, and Anthropic API latency.
 
 ---
 
 ## Tech Stack
 
-- **Frontend**: React (TypeScript), Vite, Tailwind CSS, shadcn/ui
-    
-- **Backend**: Node.js, Express
-    
-- **AI Engine**: Anthropic Claude 3.5 Sonnet (via API)
-    
-- **Data Validation**: Zod
-    
-- **State Management**: React Hooks & Context
-    
+- **Runtime**: Node.js & TypeScript
+- **Framework**: Express.js
+- **Database**: PostgreSQL (via Neon/Supabase)
+- **ORM**: Drizzle ORM
+- **Queue/Cache**: Redis & BullMQ
+- **AI Engine**: Anthropic Claude 3.5 Sonnet
+- **Validation**: Zod
+- **Logging**: Pino (with PII redaction)
+- **PDF Generation**: PDFKit
+
+---
+
+## API Reference
+
+### Core Operations
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/extract` | Extract order from a single message (Sync) |
+| `POST` | `/api/extract-order` | Extract order from full chat history (Sync) |
+| `POST` | `/api/generate-invoice` | Generate PDF invoice for an order |
+
+### Async Operations (Background Jobs)
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/async/extract` | Queue single message extraction |
+| `POST` | `/api/async/extract-order` | Queue chat log extraction |
+| `GET` | `/api/jobs/:id` | Check status of background job |
+
+### Data & Management
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/orders` | List all orders (Pagination supported) |
+| `GET` | `/api/orders/:id` | Get specific order details |
+| `PATCH` | `/api/orders/:id` | Update order status |
+| `DELETE` | `/api/orders/:id` | Soft delete an order |
+
+### System
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/health` | System health check (DB, Redis, AI) |
+| `GET` | `/api/queue/health` | Queue metrics (Waiting, Active, Failed) |
 
 ---
 
 ## Getting Started
 
 ### Prerequisites
-
-- Node.js (v18 or higher)
-    
-- npm or yarn
-    
-- An **Anthropic API Key** (for Claude AI)
-    
+- Node.js v18+
+- PostgreSQL Database
+- Redis Server (for async queues)
+- Anthropic API Key
 
 ### Installation
 
 1. **Clone the repository**
+``` Bash
+git clone [https://github.com/yourusername/chat2cash.git](https://github.com/yourusername/chat2cash.git) cd chat2cash
+```
+2. **Install Dependencies**
+``` Bash
+npm install
+```
+3. **Environment Setup** Create a `.env` file in the root:
+``` code Snippet
+    PORT=3000
+    NODE_ENV=development
     
-    Bash
+    # Database
+    DATABASE_URL="postgresql://user:pass@localhost:5432/chat2cash"
     
-    ```
-    git clone https://github.com/yourusername/chat2cash.git
-    cd chat2cash
-    ```
+    # Redis (Required for Queues)
+    REDIS_URL="redis://localhost:6379"
     
-2. **Install dependencies**
+    # AI
+    ANTHROPIC_API_KEY="sk-ant-api03-..."
     
-    Bash
-    
-    ```
-    npm install
-    ```
-    
-3. **Configure Environment Variables**
-    
-    Create a `.env` file in the root directory and add your Anthropic API key:
-    
-    Code snippet
-    
-    ```
-    ANTHROPIC_API_KEY=sk-ant-api03-...
-    ```
-    
-4. **Run the Application**
-    
-    Bash
-    
-    ```
-    npm run dev
-    ```
-    
-    The server will start on port 5000.
-    
-    Open [http://localhost:5000](https://www.google.com/search?q=http://localhost:5000) to view the app.
-    
+    # Business Config
+    DEFAULT_BUSINESS_NAME="My Saree Shop"
+    DEFAULT_GST_NUMBER="22AAAAA0000A1Z5"
+```
+4. **Database Migration** Push the schema to your Postgres instance:
+``` Bash    
+npm run db:push
+```
+5. **Run the Server**
+``` Bash
+npm run dev
+```
 
 ---
-
 ## Project Structure
 
-Bash
-
 ```
-chat2cash/
-├── client/                 # Frontend Application
-│   ├── src/
-│   │   ├── components/     # UI Components (ChatSimulator, Dashboard, etc.)
-│   │   └── lib/            # Utilities and API clients
-├── server/                 # Backend Application
-│   ├── routes.ts           # API Routes definitions
-│   ├── anthropic.ts        # AI Logic & Prompt Engineering
-│   └── storage.ts          # In-memory database (mock)
-├── shared/                 # Shared Types
-│   └── schema.ts           # Zod schemas for validation
-└── chats/                  # Sample chat logs for testing
+src/
+├── config/         # DB, Env, and App Configs
+├── controllers/    # Request Handlers
+├── middlewares/    # Error Handling, Logging, Auth, PII Redaction
+├── routes/         # API Route Definitions
+├── services/       # Business Logic (AI, PDF, Queue, Storage)
+├── index.ts        # Entry Point
+└── schema.ts       # Drizzle ORM Schema & Zod Types
 ```
 
 ---
-
-## API Endpoints
-
-The backend provides the following REST endpoints:
-
-- `POST /api/extract-order`: Takes a raw chat message/log and returns structured JSON.
-    
-- `POST /api/generate-invoice`: Generates invoice details from a confirmed order.
-    
-- `GET /api/orders`: Retrieves all stored orders.
-    
-- `GET /api/stats`: Returns dashboard analytics (revenue, order counts).
-    
-
----
-
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome!
 
 1. Fork the Project
-    
 2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-    
 3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-    
 4. Push to the Branch (`git push origin feature/AmazingFeature`)
-    
 5. Open a Pull Request
-    
-
----
-
-## License
-
-Distributed under the MIT License. See `LICENSE` for more information.
-
 ---
 
 _Built with ❤️ for the 60 million SMBs of India._
