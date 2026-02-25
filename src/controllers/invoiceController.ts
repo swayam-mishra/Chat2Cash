@@ -3,7 +3,7 @@ import { generateInvoiceData } from "../services/invoiceService";
 import { storage } from "../services/storageService";
 import { pdfService } from "../services/pdfService";
 import { asyncHandler, AppError } from "../middlewares/errorHandler";
-import { env } from "../config/env";
+
 import { z } from "zod";
 
 const generateInvoiceSchema = z.object({
@@ -12,18 +12,20 @@ const generateInvoiceSchema = z.object({
 
 export const generateInvoice = asyncHandler(async (req: Request, res: Response) => {
   const { orderId } = generateInvoiceSchema.parse(req.body);
+  const orgId = req.orgId!;
 
-  const order = await storage.getChatOrder(orderId);
-  if (!order) {
-    throw new AppError("Order not found", 404);
+  // 1. Fetch organization details to use dynamic business name & GST
+  const org = await storage.getOrganization(orgId);
+  if (!org) {
+    throw new AppError("Organization not found", 404);
   }
 
-  // 1. Generate Structured Invoice Data & Persist to DB
-  const updatedOrder = await storage.generateAndAttachInvoice(orderId, (orderData, seq) => {
+  // 2. Generate Structured Invoice Data & Persist to DB
+  const updatedOrder = await storage.generateAndAttachInvoice(orgId, orderId, (orderData, seq) => {
     return generateInvoiceData(orderData, {
       invoiceSequence: seq,
-      businessName: env.DEFAULT_BUSINESS_NAME,
-      gstNumber: env.DEFAULT_GST_NUMBER,
+      businessName: org.name,
+      gstNumber: org.gstNumber || "",
     });
   });
 

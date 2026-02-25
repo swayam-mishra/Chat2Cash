@@ -9,6 +9,7 @@ import { sql } from "drizzle-orm";
 import { env } from "../config/env";
 import { logger } from "../middlewares/logger";
 import { getQueueHealth } from "../services/queueService";
+import { tenantHandler } from "../middlewares/tenantHandler";
 
 const router = Router();
 
@@ -72,6 +73,9 @@ router.get("/health", async (_req, res) => {
 
   res.status(statusCode).json(healthStatus);
 });
+
+// Apply tenant context to all subsequent routes (fails closed if header is missing)
+router.use(tenantHandler);
 
 // Read Operations: General Rate Limit + PII Redaction
 router.get("/stats", generalLimiter, orderController.getStats);

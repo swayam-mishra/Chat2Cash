@@ -98,21 +98,41 @@ export type ExtractedChatOrderItem = z.infer<typeof extractedChatOrderItemSchema
 export type ExtractedChatOrder = z.infer<typeof extractedChatOrderSchema>;
 export type UpdateChatOrderRequest = z.infer<typeof updateChatOrderSchema>; 
 export type InsertUser = { username: string; password: string };
+export type Organization = typeof organizationsTable.$inferSelect;
 export type User = { id: string; username: string; password: string };
 
 // ==========================================
 // NORMALIZED & CONSOLIDATED DB TABLES
 // ==========================================
 
+// Multi-tenancy: Each organization is a business using the platform
+export const organizationsTable = pgTable("organizations", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  gstNumber: text("gst_number"),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+
 export const customersTable = pgTable("customers", {
   id: text("id").primaryKey(),
+  // Multi-tenancy isolation: customers belong to a single organization
+  organizationId: text("organization_id").references(() => organizationsTable.id).notNull(),
   name: text("name"),
-  phone: text("phone").unique(),
+  // Removed global unique() — same phone can appear across different organizations
+  phone: text("phone"),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+}, (table) => {
+  return {
+    // Phone is unique only within an organization
+    orgPhoneIdx: index("org_phone_idx").on(table.organizationId, table.phone),
+  };
 });
 
 export const ordersTable = pgTable("orders", {
   id: text("id").primaryKey(),
+  
+  // Multi-tenancy isolation: orders belong to a single organization
+  organizationId: text("organization_id").references(() => organizationsTable.id).notNull(),
   
   customerId: text("customer_id").references(() => customersTable.id).notNull(),
   
@@ -133,18 +153,16 @@ export const ordersTable = pgTable("orders", {
 
   invoiceSequence: integer("invoice_sequence"),
   
-  // OPTIMIZATION: Soft Delete Column
   deletedAt: timestamp("deleted_at", { mode: 'string' }),
   
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 }, (table) => {
   return {
-    // OPTIMIZATION: B-Tree Indexes for frequent lookups
     statusIdx: index("status_idx").on(table.status),
     extractionTypeIdx: index("extraction_type_idx").on(table.extractionType),
     customerIdIdx: index("customer_id_idx").on(table.customerId),
-    
-    // OPTIMIZATION: GIN Indexes for JSONB searching
+    // Index for frequent organization-level queries
+    orgIdx: index("org_idx").on(table.organizationId),
     itemsGinIdx: index("items_gin_idx").using("gin", table.items),
     rawMessagesGinIdx: index("raw_messages_gin_idx").using("gin", table.rawMessages),
   };

@@ -14,15 +14,16 @@ const sanitizeResponse = (order: any) => {
 export const extractOrder = asyncHandler(async (req: Request, res: Response) => {
   const { message } = extractOrderRequestSchema.parse(req.body);
   const order = await anthropicService.extractOrderFromMessage(message);
-  const savedOrder = await storage.addOrder(order);
+  const savedOrder = await storage.addOrder(req.orgId!, order);
   res.status(201).json(sanitizeResponse(savedOrder));
 });
 
-export const getStats = asyncHandler(async (_req: Request, res: Response) => {
-  const totalOrders = await storage.getChatOrdersCount();
-  const pendingOrders = await storage.getChatOrdersCount("pending");
-  const confirmedOrders = await storage.getChatOrdersCount("confirmed");
-  const totalRevenue = await storage.getTotalRevenue();
+export const getStats = asyncHandler(async (req: Request, res: Response) => {
+  const orgId = req.orgId!;
+  const totalOrders = await storage.getChatOrdersCount(orgId);
+  const pendingOrders = await storage.getChatOrdersCount(orgId, "pending");
+  const confirmedOrders = await storage.getChatOrdersCount(orgId, "confirmed");
+  const totalRevenue = await storage.getTotalRevenue(orgId);
 
   res.json({
     total_orders: totalOrders,
@@ -36,13 +37,13 @@ export const getOrders = asyncHandler(async (req: Request, res: Response) => {
   const limit = Number(req.query.limit) || 50;
   const offset = Number(req.query.offset) || 0;
   
-  const orders = await storage.getChatOrders(limit, offset);
+  const orders = await storage.getChatOrders(req.orgId!, limit, offset);
   res.json(orders.map(sanitizeResponse));
 });
 
 export const getOrderById = asyncHandler(async (req: Request, res: Response) => {
   const id = req.params.id as string;
-  const order = await storage.getChatOrder(id);
+  const order = await storage.getChatOrder(req.orgId!, id);
   
   if (!order) {
     throw new AppError("Order not found", 404);
@@ -54,7 +55,7 @@ export const getOrderById = asyncHandler(async (req: Request, res: Response) => 
 export const extractChatOrder = asyncHandler(async (req: Request, res: Response) => {
   const { messages } = extractOrderFromChatRequestSchema.parse(req.body);
   const order = await anthropicService.extractOrderFromChat(messages);
-  const savedOrder = await storage.addChatOrder(order);
+  const savedOrder = await storage.addChatOrder(req.orgId!, order);
   res.status(201).json(sanitizeResponse(savedOrder));
 });
 
@@ -66,7 +67,7 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
 
   // Since storage methods are specific, we might need to check order type or try both
   // For this optimized version, we assume Chat Orders are the primary entity
-  const updatedOrder = await storage.updateChatOrderDetails(id, { status });
+  const updatedOrder = await storage.updateChatOrderDetails(req.orgId!, id, { status });
   
   if (!updatedOrder) {
     throw new AppError("Order not found", 404);
@@ -79,7 +80,7 @@ export const editOrder = asyncHandler(async (req: Request, res: Response) => {
   const id = req.params.id as string;
   const updates = updateChatOrderSchema.parse(req.body);
 
-  const updatedOrder = await storage.updateChatOrderDetails(id, updates);
+  const updatedOrder = await storage.updateChatOrderDetails(req.orgId!, id, updates);
   
   if (!updatedOrder) {
     throw new AppError("Order not found", 404);
@@ -90,7 +91,7 @@ export const editOrder = asyncHandler(async (req: Request, res: Response) => {
 
 export const deleteOrder = asyncHandler(async (req: Request, res: Response) => {
   const id = req.params.id as string;
-  const success = await storage.deleteOrder(id);
+  const success = await storage.deleteOrder(req.orgId!, id);
   
   if (!success) {
     throw new AppError("Order not found or already deleted", 404);
