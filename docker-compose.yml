@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # 1. PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: chat2cash
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d chat2cash"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 2. Redis (BullMQ queue backend)
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 3. API Server — handles HTTP requests only, no AI processing
+  api:
+    build: .
+    command: npm run dev
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgres://user:password@db:5432/chat2cash
+      REDIS_URL: redis://redis:6379
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      DEFAULT_BUSINESS_NAME: ${DEFAULT_BUSINESS_NAME:-Chat2Cash Store}
+      DEFAULT_GST_NUMBER: ${DEFAULT_GST_NUMBER:-22AAAAA0000A1Z5}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # 4. Background Worker — handles AI extraction jobs only
+  #    Scale independently without touching the API tier
+  worker:
+    build: .
+    command: npm run dev:worker
+    restart: always
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://user:password@db:5432/chat2cash
+      REDIS_URL: redis://redis:6379
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      DEFAULT_BUSINESS_NAME: ${DEFAULT_BUSINESS_NAME:-Chat2Cash Store}
+      DEFAULT_GST_NUMBER: ${DEFAULT_GST_NUMBER:-22AAAAA0000A1Z5}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 2 # Scale horizontally — each replica polls the same queue
+
+volumes:
+  postgres_data:
