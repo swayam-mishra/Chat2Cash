@@ -1,7 +1,7 @@
 import { ExtractedOrder, ExtractedChatOrder, Invoice, Organization } from "../schema";
 import { db } from "../config/db";
-import { ordersTable, customersTable, organizationsTable } from "../schema";
-import { eq, desc, max, count, sum, and, isNull } from "drizzle-orm"; 
+import { ordersTable, customersTable, organizationsTable, productsTable, orderItemsTable } from "../schema";
+import { eq, desc, max, count, sum, and, isNull, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -31,12 +31,20 @@ export interface IStorage {
 // Row mappers
 // ---------------------------------------------------------------------------
 
-function mapToExtractedOrder(orderRow: any, customerRow: any): ExtractedOrder {
+function mapToExtractedOrder(orderRow: any, customerRow: any, itemRows: any[] = []): ExtractedOrder {
   return {
     id: orderRow.id,
     customerName: customerRow?.name || undefined,
     customerPhone: customerRow?.phone || undefined,
-    items: orderRow.items,
+    items: itemRows.length > 0
+      ? itemRows.map((i) => ({
+          name: i.productName,
+          quantity: i.quantity,
+          unit: i.unit ?? undefined,
+          pricePerUnit: i.pricePerUnit ?? undefined,
+          totalPrice: i.totalPrice ?? undefined,
+        }))
+      : orderRow.rawAiResponse ?? [], // fallback to JSONB audit column
     totalAmount: orderRow.totalAmount || undefined,
     currency: orderRow.currency || "INR",
     notes: orderRow.specialInstructions || undefined,
@@ -49,11 +57,17 @@ function mapToExtractedOrder(orderRow: any, customerRow: any): ExtractedOrder {
   };
 }
 
-function mapToExtractedChatOrder(orderRow: any, customerRow: any): ExtractedChatOrder {
+function mapToExtractedChatOrder(orderRow: any, customerRow: any, itemRows: any[] = []): ExtractedChatOrder {
   return {
     id: orderRow.id,
     customer_name: customerRow?.name || undefined,
-    items: orderRow.items,
+    items: itemRows.length > 0
+      ? itemRows.map((i) => ({
+          product_name: i.productName,
+          quantity: i.quantity,
+          price: i.pricePerUnit ?? null,
+        }))
+      : orderRow.rawAiResponse ?? [], // fallback to JSONB audit column
     delivery_address: orderRow.deliveryAddress || undefined,
     delivery_date: orderRow.deliveryDate || undefined,
     special_instructions: orderRow.specialInstructions || undefined,
@@ -98,7 +112,20 @@ export class DatabaseStorage implements IStorage {
       ))
       .orderBy(desc(ordersTable.createdAt));
 
-    return results.map(row => mapToExtractedOrder(row.order, row.customer));
+    const orderIds = results.map((r) => r.order.id);
+    const allItems = orderIds.length > 0
+      ? await db.select().from(orderItemsTable).where(inArray(orderItemsTable.orderId, orderIds))
+      : [];
+    const itemsByOrderId = new Map<string, any[]>();
+    for (const item of allItems) {
+      const arr = itemsByOrderId.get(item.orderId) ?? [];
+      arr.push(item);
+      itemsByOrderId.set(item.orderId, arr);
+    }
+
+    return results.map((row) =>
+      mapToExtractedOrder(row.order, row.customer, itemsByOrderId.get(row.order.id) ?? [])
+    );
   }
 
   async getOrder(orgId: string, id: string): Promise<ExtractedOrder | undefined> {
@@ -112,7 +139,8 @@ export class DatabaseStorage implements IStorage {
       ));
 
     if (results.length === 0) return undefined;
-    return mapToExtractedOrder(results[0].order, results[0].customer);
+    const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, id));
+    return mapToExtractedOrder(results[0].order, results[0].customer, items);
   }
 
   async addOrder(orgId: string, order: ExtractedOrder): Promise<ExtractedOrder> {
@@ -130,7 +158,7 @@ export class DatabaseStorage implements IStorage {
         organizationId: orgId,                           // 🔒 Scoped
         customerId: customer.id,
         extractionType: 'single_message',
-        items: order.items,
+        rawAiResponse: order.items,                      // audit/debug copy
         totalAmount: order.totalAmount,
         currency: order.currency,
         specialInstructions: order.notes,
@@ -140,7 +168,23 @@ export class DatabaseStorage implements IStorage {
         createdAt: order.createdAt,
       }).returning();
 
-      return mapToExtractedOrder(newOrder, customer);
+      // Insert normalized order items
+      const itemRows = order.items.length > 0
+        ? await tx.insert(orderItemsTable).values(
+            order.items.map((item) => ({
+              id: randomUUID(),
+              orderId: newOrder.id,
+              organizationId: orgId,
+              productName: item.name,
+              quantity: item.quantity,
+              unit: item.unit,
+              pricePerUnit: item.pricePerUnit,
+              totalPrice: item.totalPrice,
+            }))
+          ).returning()
+        : [];
+
+      return mapToExtractedOrder(newOrder, customer, itemRows);
     });
   }
 
@@ -158,7 +202,8 @@ export class DatabaseStorage implements IStorage {
       if (!updatedOrder) return undefined;
 
       const [customer] = await tx.select().from(customersTable).where(eq(customersTable.id, updatedOrder.customerId));
-      return mapToExtractedOrder(updatedOrder, customer);
+      const items = await tx.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, id));
+      return mapToExtractedOrder(updatedOrder, customer, items);
     });
   }
 
@@ -191,7 +236,20 @@ export class DatabaseStorage implements IStorage {
       .limit(limit)
       .offset(offset);
 
-    return results.map(row => mapToExtractedChatOrder(row.order, row.customer));
+    const orderIds = results.map((r) => r.order.id);
+    const allItems = orderIds.length > 0
+      ? await db.select().from(orderItemsTable).where(inArray(orderItemsTable.orderId, orderIds))
+      : [];
+    const itemsByOrderId = new Map<string, any[]>();
+    for (const item of allItems) {
+      const arr = itemsByOrderId.get(item.orderId) ?? [];
+      arr.push(item);
+      itemsByOrderId.set(item.orderId, arr);
+    }
+
+    return results.map((row) =>
+      mapToExtractedChatOrder(row.order, row.customer, itemsByOrderId.get(row.order.id) ?? [])
+    );
   }
 
   async getChatOrdersCount(orgId: string, statusFilter?: string): Promise<number> {
@@ -235,7 +293,8 @@ export class DatabaseStorage implements IStorage {
       ));
 
     if (results.length === 0) return undefined;
-    return mapToExtractedChatOrder(results[0].order, results[0].customer);
+    const items = await db.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, id));
+    return mapToExtractedChatOrder(results[0].order, results[0].customer, items);
   }
 
   async addChatOrder(orgId: string, order: ExtractedChatOrder): Promise<ExtractedChatOrder> {
@@ -298,14 +357,15 @@ export class DatabaseStorage implements IStorage {
       if (!updatedOrder) return undefined;
 
       const [customer] = await tx.select().from(customersTable).where(eq(customersTable.id, updatedOrder.customerId));
-      return mapToExtractedChatOrder(updatedOrder, customer);
+      const items = await tx.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+      return mapToExtractedChatOrder(updatedOrder, customer, items);
     });
   }
 
   async updateChatOrderDetails(orgId: string, id: string, updates: Partial<ExtractedChatOrder>): Promise<ExtractedChatOrder | undefined> {
     return await db.transaction(async (tx) => {
       const dbUpdates: any = {};
-      if (updates.items !== undefined) dbUpdates.items = updates.items;
+      // Note: items are managed in the normalized order_items table, not as a JSONB column
       if (updates.total !== undefined) dbUpdates.totalAmount = updates.total;
       if (updates.delivery_address !== undefined) dbUpdates.deliveryAddress = updates.delivery_address;
       if (updates.delivery_date !== undefined) dbUpdates.deliveryDate = updates.delivery_date;
@@ -323,8 +383,29 @@ export class DatabaseStorage implements IStorage {
 
       if (!updatedOrder) return undefined;
 
+      // Update normalized items if provided (delete-then-insert pattern)
+      let itemRows: any[] = [];
+      if (updates.items !== undefined) {
+        await tx.delete(orderItemsTable).where(eq(orderItemsTable.orderId, id));
+        if (updates.items.length > 0) {
+          itemRows = await tx.insert(orderItemsTable).values(
+            updates.items.map((item) => ({
+              id: randomUUID(),
+              orderId: id,
+              organizationId: orgId,
+              productName: item.product_name,
+              quantity: item.quantity,
+              pricePerUnit: item.price ?? undefined,
+              totalPrice: item.price != null ? item.quantity * item.price : undefined,
+            }))
+          ).returning();
+        }
+      } else {
+        itemRows = await tx.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, id));
+      }
+
       const [customer] = await tx.select().from(customersTable).where(eq(customersTable.id, updatedOrder.customerId));
-      
+
       if (updates.customer_name && updates.customer_name !== customer.name) {
         const [updatedCustomer] = await tx.update(customersTable)
           .set({ name: updates.customer_name })
@@ -333,10 +414,10 @@ export class DatabaseStorage implements IStorage {
             eq(customersTable.organizationId, orgId)     // 🔒 Data isolation
           ))
           .returning();
-        return mapToExtractedChatOrder(updatedOrder, updatedCustomer);
+        return mapToExtractedChatOrder(updatedOrder, updatedCustomer, itemRows);
       }
 
-      return mapToExtractedChatOrder(updatedOrder, customer);
+      return mapToExtractedChatOrder(updatedOrder, customer, itemRows);
     });
   }
 
@@ -372,7 +453,9 @@ export class DatabaseStorage implements IStorage {
       const nextSequenceNumber = (maxSeqResult[0]?.maxSeq || 0) + 1;
 
       const { order: dbOrder, customer: dbCustomer } = result[0];
-      const chatOrder = mapToExtractedChatOrder(dbOrder, dbCustomer);
+      // Load normalized items once — used for both invoice generation and the return value
+      const orderItems = await tx.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+      const chatOrder = mapToExtractedChatOrder(dbOrder, dbCustomer, orderItems);
       
       const invoiceData = generateInvoiceFn(chatOrder, nextSequenceNumber);
 
@@ -388,7 +471,7 @@ export class DatabaseStorage implements IStorage {
         ))
         .returning();
 
-      return mapToExtractedChatOrder(updatedOrder, dbCustomer);
+      return mapToExtractedChatOrder(updatedOrder, dbCustomer, orderItems);
     });
   }
 }

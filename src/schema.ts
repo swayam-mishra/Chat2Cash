@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { pgTable, text, real, jsonb, timestamp, integer, index } from "drizzle-orm/pg-core";
+import { pgTable, text, real, jsonb, timestamp, integer, boolean, index } from "drizzle-orm/pg-core";
 
 export const orderItemSchema = z.object({
   name: z.string(),
@@ -138,7 +138,7 @@ export const ordersTable = pgTable("orders", {
   
   extractionType: text("extraction_type").notNull(), 
   
-  items: jsonb("items").notNull(),
+  rawAiResponse: jsonb("raw_ai_response").notNull(), // Raw AI extraction — kept for audit/debug only
   totalAmount: real("total_amount"),
   currency: text("currency").default("INR"),
   
@@ -163,7 +163,75 @@ export const ordersTable = pgTable("orders", {
     customerIdIdx: index("customer_id_idx").on(table.customerId),
     // Index for frequent organization-level queries
     orgIdx: index("org_idx").on(table.organizationId),
-    itemsGinIdx: index("items_gin_idx").using("gin", table.items),
+    rawAiResponseGinIdx: index("raw_ai_response_gin_idx").using("gin", table.rawAiResponse),
     rawMessagesGinIdx: index("raw_messages_gin_idx").using("gin", table.rawMessages),
+  };
+});
+
+// PRODUCTS TABLE — per-org product catalog
+export const productsTable = pgTable("products", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").references(() => organizationsTable.id).notNull(),
+  name: text("name").notNull(),
+  unit: text("unit"),            // e.g. "kg", "pcs", "dozen"
+  defaultPrice: real("default_price"),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+}, (table) => {
+  return {
+    orgProductNameIdx: index("org_product_name_idx").on(table.organizationId, table.name),
+  };
+});
+
+// ORDER ITEMS TABLE — normalized line items (one row per item per order)
+export const orderItemsTable = pgTable("order_items", {
+  id: text("id").primaryKey(),
+  orderId: text("order_id").references(() => ordersTable.id).notNull(),
+  organizationId: text("organization_id").references(() => organizationsTable.id).notNull(),
+  // Optional soft-link to a known product in the catalog
+  productId: text("product_id").references(() => productsTable.id),
+  productName: text("product_name").notNull(), // denormalized for speed
+  quantity: real("quantity").notNull(),
+  unit: text("unit"),
+  pricePerUnit: real("price_per_unit"),
+  totalPrice: real("total_price"),
+}, (table) => {
+  return {
+    orderIdIdx: index("order_items_order_id_idx").on(table.orderId),
+    orgIdx: index("order_items_org_idx").on(table.organizationId),
+  };
+});
+
+// ==========================================
+// AUTH & ACCESS TABLES
+// ==========================================
+
+// USERS TABLE (Mirrors Supabase Auth)
+export const usersTable = pgTable("users", {
+  id: text("id").primaryKey(), // Matches Supabase auth.uid()
+  email: text("email").notNull(),
+  name: text("name"),
+
+  // Link User -> Organization
+  organizationId: text("organization_id").references(() => organizationsTable.id),
+
+  role: text("role").default("member"), // 'owner' | 'member'
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+
+// API KEYS TABLE (For WhatsApp Bots/Machines)
+export const apiKeysTable = pgTable("api_keys", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").references(() => organizationsTable.id).notNull(),
+
+  keyHash: text("key_hash").notNull(),     // Store SHA-256 hash, NOT the raw key
+  name: text("name").notNull(),            // e.g. "Production Bot"
+  maskedKey: text("masked_key").notNull(), // e.g. "sk_...9a2f"
+
+  isActive: boolean("is_active").default(true).notNull(),
+  lastUsedAt: timestamp("last_used_at", { mode: 'string' }),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+}, (table) => {
+  return {
+    hashIdx: index("api_key_hash_idx").on(table.keyHash),
   };
 });

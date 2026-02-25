@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
+    "@azure/storage-blob": "^12.31.0",
+    "@supabase/supabase-js": "^2.97.0",
     "bullmq": "^5.70.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",

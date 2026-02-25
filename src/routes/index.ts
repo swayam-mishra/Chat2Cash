@@ -9,7 +9,7 @@ import { sql } from "drizzle-orm";
 import { env } from "../config/env";
 import { logger } from "../middlewares/logger";
 import { getQueueHealth } from "../services/queueService";
-import { tenantHandler } from "../middlewares/tenantHandler";
+import { authHandler, requireOrg } from "../middlewares/authHandler";
 
 const router = Router();
 
@@ -74,30 +74,30 @@ router.get("/health", async (_req, res) => {
   res.status(statusCode).json(healthStatus);
 });
 
-// Apply tenant context to all subsequent routes (fails closed if header is missing)
-router.use(tenantHandler);
+// Authenticate every request; inject req.user and req.orgId when available
+router.use(authHandler);
 
 // Read Operations: General Rate Limit + PII Redaction
-router.get("/stats", generalLimiter, orderController.getStats);
-router.get("/orders", generalLimiter, redactPII, orderController.getOrders);
-router.get("/orders/:id", generalLimiter, redactPII, orderController.getOrderById);
+router.get("/stats", generalLimiter, requireOrg, orderController.getStats);
+router.get("/orders", generalLimiter, requireOrg, redactPII, orderController.getOrders);
+router.get("/orders/:id", generalLimiter, requireOrg, redactPII, orderController.getOrderById);
 
 // Write Operations: Strict Rate Limit + Input Sanitization
-router.post("/extract", extractLimiter, sanitizeInputs, orderController.extractOrder);
-router.post("/extract-order", extractLimiter, sanitizeInputs, orderController.extractChatOrder);
-router.post("/generate-invoice", extractLimiter, sanitizeInputs, invoiceController.generateInvoice);
+router.post("/extract", extractLimiter, requireOrg, sanitizeInputs, orderController.extractOrder);
+router.post("/extract-order", extractLimiter, requireOrg, sanitizeInputs, orderController.extractChatOrder);
+router.post("/generate-invoice", extractLimiter, requireOrg, sanitizeInputs, invoiceController.generateInvoice);
 
 // Async Extraction (BullMQ Background Jobs) — returns 202 with job ID
-router.post("/async/extract", extractLimiter, sanitizeInputs, orderController.asyncExtractOrder);
-router.post("/async/extract-order", extractLimiter, sanitizeInputs, orderController.asyncExtractChatOrder);
+router.post("/async/extract", extractLimiter, requireOrg, sanitizeInputs, orderController.asyncExtractOrder);
+router.post("/async/extract-order", extractLimiter, requireOrg, sanitizeInputs, orderController.asyncExtractChatOrder);
 
 // Job Status & Queue Health
 router.get("/jobs/:id", generalLimiter, orderController.getJobStatusById);
 router.get("/queue/health", generalLimiter, orderController.getQueueStats);
 
 // Updates: Strict Rate Limit + Input Sanitization
-router.patch("/orders/:id/edit", extractLimiter, sanitizeInputs, orderController.editOrder);
-router.patch("/orders/:id", extractLimiter, sanitizeInputs, orderController.updateOrderStatus);
-router.delete("/orders/:id", extractLimiter, orderController.deleteOrder);
+router.patch("/orders/:id/edit", extractLimiter, requireOrg, sanitizeInputs, orderController.editOrder);
+router.patch("/orders/:id", extractLimiter, requireOrg, sanitizeInputs, orderController.updateOrderStatus);
+router.delete("/orders/:id", extractLimiter, requireOrg, orderController.deleteOrder);
 
 export default router;

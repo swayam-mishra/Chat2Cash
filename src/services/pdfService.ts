@@ -1,8 +1,12 @@
 import PDFDocument from "pdfkit";
 import { Invoice } from "../schema";
-import fs from "fs";
-import path from "path";
-// import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"; // Uncomment when S3 is set up
+import {
+  BlobServiceClient,
+  BlobSASPermissions,
+  generateBlobSASQueryParameters,
+  StorageSharedKeyCredential,
+} from "@azure/storage-blob";
+import { env } from "../config/env";
 
 export class PdfService {
   
@@ -77,21 +81,39 @@ export class PdfService {
     });
   }
 
-  // Placeholder for S3 Upload
+  // Upload PDF buffer to Azure Blob Storage and return a 15-minute SAS URL
   async uploadToStorage(fileName: string, fileBuffer: Buffer): Promise<string> {
-    // In a real implementation:
-    // const s3 = new S3Client({ ...env config });
-    // await s3.send(new PutObjectCommand({ Bucket: env.AWS_BUCKET_NAME, Key: fileName, Body: fileBuffer }));
-    // return `https://${env.AWS_BUCKET_NAME}.s3.amazonaws.com/${fileName}`;
-    
-    // For now, save locally to 'temp' folder to demonstrate functionality
-    const tempDir = path.join(__dirname, "../../temp_invoices");
-    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
-    
-    const filePath = path.join(tempDir, fileName);
-    fs.writeFileSync(filePath, fileBuffer);
-    
-    return filePath; // Return local path for now
+    const sharedKeyCredential = new StorageSharedKeyCredential(
+      env.AZURE_STORAGE_ACCOUNT_NAME,
+      env.AZURE_STORAGE_ACCOUNT_KEY,
+    );
+    const blobServiceClient = new BlobServiceClient(
+      `https://${env.AZURE_STORAGE_ACCOUNT_NAME}.blob.core.windows.net`,
+      sharedKeyCredential,
+    );
+
+    const containerClient = blobServiceClient.getContainerClient(env.AZURE_STORAGE_CONTAINER_NAME);
+    const blockBlobClient = containerClient.getBlockBlobClient(fileName);
+
+    await blockBlobClient.upload(fileBuffer, fileBuffer.length, {
+      blobHTTPHeaders: { blobContentType: "application/pdf" },
+    });
+
+    // Generate a SAS URL that expires in 15 minutes (Azure equivalent of AWS presigned URL)
+    const expiresOn = new Date();
+    expiresOn.setMinutes(expiresOn.getMinutes() + 15);
+
+    const sasToken = generateBlobSASQueryParameters(
+      {
+        containerName: env.AZURE_STORAGE_CONTAINER_NAME,
+        blobName: fileName,
+        permissions: BlobSASPermissions.parse("r"),
+        expiresOn,
+      },
+      sharedKeyCredential,
+    ).toString();
+
+    return `https://${env.AZURE_STORAGE_ACCOUNT_NAME}.blob.core.windows.net/${env.AZURE_STORAGE_CONTAINER_NAME}/${fileName}?${sasToken}`;
   }
 }
 
