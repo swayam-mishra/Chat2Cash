@@ -21,6 +21,7 @@
     "drizzle-orm": "^0.39.3",
     "express": "^4.21.1",
     "express-rate-limit": "^7.4.1",
+    "google-libphonenumber": "^3.2.44",
     "ioredis": "^5.9.3",
     "node-fetch": "^3.3.2",
     "pdfkit": "^0.17.2",
@@ -32,6 +33,7 @@
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
+    "@types/google-libphonenumber": "^7.4.30",
     "@types/node": "^20.16.5",
     "@types/pdfkit": "^0.17.5",
     "@types/pg": "^8.11.10",

@@ -5,10 +5,10 @@ import { log, logError } from "../middlewares/logger";
 import { getPrompt } from "./promptManager";
 import { env } from "../config/env";
 
-const DEFAULT_MODEL_STR = "claude-3-5-sonnet-20241022";
-const CHAT_EXTRACT_MODEL = "claude-3-5-sonnet-20241022";
+const DEFAULT_MODEL_STR = env.AI_MODEL_SMART;
+const CHAT_EXTRACT_MODEL = env.AI_MODEL_SMART;
 
-const REQUEST_TIMEOUT_MS = 60000; // Increased to 60s for long context processing
+const REQUEST_TIMEOUT_MS = parseInt(env.AI_REQUEST_TIMEOUT_MS);
 const MAX_RETRIES = 3;            // Increased retries for resilience
 const INITIAL_RETRY_DELAY = 2000; // Start with 2s delay
 const MAX_RETRY_DELAY = 10000;    // Cap delay at 10s

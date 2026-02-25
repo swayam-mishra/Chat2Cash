@@ -1,8 +1,9 @@
 import { ExtractedOrder, ExtractedChatOrder, Invoice, Organization } from "../schema";
 import { db } from "../config/db";
-import { ordersTable, customersTable, organizationsTable, productsTable, orderItemsTable } from "../schema";
+import { ordersTable, customersTable, organizationsTable, productsTable, orderItemsTable, businessProfilesTable } from "../schema";
 import { eq, desc, max, count, sum, and, isNull, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { env } from "../config/env";
 
 export interface IStorage {
   // Organization
@@ -25,6 +26,18 @@ export interface IStorage {
   
   getChatOrdersCount(orgId: string, statusFilter?: string): Promise<number>;
   getTotalRevenue(orgId: string): Promise<number>;
+
+  // Business profile
+  getBusinessProfile(orgId: string): Promise<{
+    businessName: string;
+    gstNumber: string;
+    taxRate: number;
+    currency: string;
+    logoUrl: string | null;
+    address: string | null;
+    phone: string | null;
+    email: string | null;
+  }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -95,6 +108,38 @@ export class DatabaseStorage implements IStorage {
       .from(organizationsTable)
       .where(eq(organizationsTable.id, orgId));
     return result[0];
+  }
+
+  async getBusinessProfile(orgId: string) {
+    const result = await db.select()
+      .from(businessProfilesTable)
+      .where(eq(businessProfilesTable.organizationId, orgId))
+      .limit(1);
+
+    if (result.length > 0) {
+      return {
+        businessName: result[0].businessName,
+        gstNumber: result[0].gstNumber ?? "",
+        taxRate: result[0].taxRate ?? 18.0,
+        currency: result[0].currency ?? "INR",
+        logoUrl: result[0].logoUrl,
+        address: result[0].address,
+        phone: result[0].phone,
+        email: result[0].email,
+      };
+    }
+
+    // Fallback to env defaults (backward compatibility during migration)
+    return {
+      businessName: env.DEFAULT_BUSINESS_NAME,
+      gstNumber: env.DEFAULT_GST_NUMBER,
+      taxRate: 18.0,
+      currency: "INR",
+      logoUrl: null,
+      address: null,
+      phone: null,
+      email: null,
+    };
   }
 
   // ==========================================
@@ -327,7 +372,7 @@ export class DatabaseStorage implements IStorage {
         organizationId: orgId,                           // 🔒 Scoped
         customerId,
         extractionType: 'chat_log',
-        items: order.items,
+        rawAiResponse: order.items,                      // audit/debug copy
         totalAmount: order.total,
         deliveryAddress: order.delivery_address,
         deliveryDate: order.delivery_date,
@@ -338,8 +383,23 @@ export class DatabaseStorage implements IStorage {
         createdAt: order.created_at,
       }).returning();
 
+      // Insert normalized order items
+      const itemRows = order.items.length > 0
+        ? await tx.insert(orderItemsTable).values(
+            order.items.map((item) => ({
+              id: randomUUID(),
+              orderId: newOrder.id,
+              organizationId: orgId,
+              productName: item.product_name,
+              quantity: item.quantity,
+              pricePerUnit: item.price ?? undefined,
+              totalPrice: item.price != null ? item.quantity * item.price : undefined,
+            }))
+          ).returning()
+        : [];
+
       const [customer] = await tx.select().from(customersTable).where(eq(customersTable.id, customerId));
-      return mapToExtractedChatOrder(newOrder, customer);
+      return mapToExtractedChatOrder(newOrder, customer, itemRows);
     });
   }
 

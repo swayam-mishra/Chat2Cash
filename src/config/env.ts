@@ -14,9 +14,20 @@ const envSchema = z.object({
   // AI Service
   ANTHROPIC_API_KEY: z.string().min(1, "ANTHROPIC_API_KEY is required"),
   
-  // Business Defaults
+  // AI Models (hot-swappable without redeploy)
+  AI_MODEL_FAST: z.string().default("claude-3-haiku-20240307"),
+  AI_MODEL_SMART: z.string().default("claude-3-5-sonnet-20241022"),
+  AI_REQUEST_TIMEOUT_MS: z.string().default("60000"),
+  
+  // Business Defaults (fallback when no business_profile row exists)
   DEFAULT_GST_NUMBER: z.string().default("22AAAAA0000A1Z5"),
   DEFAULT_BUSINESS_NAME: z.string().default("Chat2Cash Store"),
+  
+  // Rate Limiting defaults (overridden per-tier from DB)
+  RATE_LIMIT_FREE: z.string().default("20"),
+  RATE_LIMIT_PRO: z.string().default("200"),
+  RATE_LIMIT_ENTERPRISE: z.string().default("2000"),
+  RATE_LIMIT_WINDOW_MS: z.string().default("900000"),
   
   // Redis (for BullMQ async job queue)
   REDIS_URL: z.string().url().default("redis://localhost:6379"),

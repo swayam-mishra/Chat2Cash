@@ -110,7 +110,24 @@ export const organizationsTable = pgTable("organizations", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   gstNumber: text("gst_number"),
+  tier: text("tier").default("free").notNull(), // 'free' | 'pro' | 'enterprise'
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+
+// Business identity & tax config per organization (1:1 with organizations)
+export const businessProfilesTable = pgTable("business_profiles", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").references(() => organizationsTable.id).notNull().unique(),
+  businessName: text("business_name").notNull(),
+  gstNumber: text("gst_number"),
+  taxRate: real("tax_rate").default(18.0),     // configurable per business (e.g. 3% for jewelry, 18% for consulting)
+  currency: text("currency").default("INR"),
+  logoUrl: text("logo_url"),
+  address: text("address"),
+  phone: text("phone"),
+  email: text("email"),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
 });
 
 export const customersTable = pgTable("customers", {
@@ -204,6 +221,16 @@ export const orderItemsTable = pgTable("order_items", {
 // ==========================================
 // AUTH & ACCESS TABLES
 // ==========================================
+
+// ROLES & PERMISSIONS TABLE (RBAC — replaces hardcoded role arrays)
+export const rolesTable = pgTable("roles", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").references(() => organizationsTable.id).notNull(),
+  name: text("name").notNull(), // 'owner' | 'admin' | 'manager' | 'auditor' | 'member'
+  permissions: jsonb("permissions").$type<string[]>().notNull().default([]),
+  // e.g. ['view_orders','edit_orders','view_pii','manage_users','manage_billing']
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
 
 // USERS TABLE (Mirrors Supabase Auth)
 export const usersTable = pgTable("users", {

@@ -1,58 +1,116 @@
 import { Request, Response, NextFunction } from "express";
+import { PhoneNumberUtil } from "google-libphonenumber";
+import { hasPermission, PERMISSIONS } from "../services/permissionService";
+import { PII_PATTERNS, SENSITIVE_KEYS } from "../config/piiPatterns";
 
-const SENSITIVE_KEYS = new Set([
-  "customerName", "customer_name",
-  "customerPhone", "customer_phone", "phone", 
-  "deliveryAddress", "delivery_address", "gst_number"
-]);
+const phoneUtil = PhoneNumberUtil.getInstance();
 
-// Regex for Indian Mobile Numbers (covers +91, 91, or just 10 digits starting with 6-9)
-const PHONE_REGEX = /(?:\+91[\-\s]?)?[6-9]\d{9}/g;
+// Regions to check when parsing phone numbers
+const PHONE_REGIONS = ["IN", "US", "GB", "CA", "AU", "DE", "FR", "JP", "SG"];
 
-// Basic Email Regex
-const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+/**
+ * Detects and redacts phone numbers in any international format
+ * using google-libphonenumber instead of hardcoded +91 regex.
+ */
+function redactPhoneNumbers(text: string): string {
+  const matches = text.match(/[+]?[\d\s\-()]{7,20}/g);
+  if (!matches) return text;
 
-function maskPII(obj: any): any {
-  if (!obj || typeof obj !== "object") return obj;
-  if (Array.isArray(obj)) return obj.map(maskPII);
-  
-  const masked: Record<string, any> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    // 1. Key-based Redaction (Fastest)
-    if (SENSITIVE_KEYS.has(key)) {
-      masked[key] = "***REDACTED***";
-      continue;
-    } 
-    
-    // 2. Value-based Scanning (Deep Scan)
-    if (typeof value === "string") {
-      // Use .replace() directly — it's a no-op if no match, and avoids
-      // the lastIndex statefulness bug with .test() + .replace() on /g regexes
-      masked[key] = value
-        .replace(PHONE_REGEX, "[PHONE REMOVED]")
-        .replace(EMAIL_REGEX, "[EMAIL REMOVED]");
-    } else if (typeof value === "object") {
-      masked[key] = maskPII(value);
-    } else {
-      masked[key] = value;
+  for (const match of matches) {
+    for (const region of PHONE_REGIONS) {
+      try {
+        const parsed = phoneUtil.parse(match.trim(), region);
+        if (phoneUtil.isValidNumber(parsed)) {
+          text = text.replace(match, "[PHONE REDACTED]");
+          break; // matched in one region, no need to try others
+        }
+      } catch {
+        // Not a valid phone number for this region, skip
+      }
     }
   }
-  return masked;
+
+  return text;
 }
 
-export const redactPII = (req: Request, res: Response, next: NextFunction) => {
-  const userRole = (req.headers['x-user-role'] as string) || 'guest';
-  const FULL_ACCESS_ROLES = ['admin', 'manager', 'owner'];
-  
-  if (FULL_ACCESS_ROLES.includes(userRole)) {
-    return next();
+/**
+ * Redact string values using all configured PII patterns + international phone parsing.
+ */
+function redactString(value: string): string {
+  let result = value;
+
+  // Apply regex patterns from config
+  for (const pattern of PII_PATTERNS) {
+    result = result.replace(pattern.regex, pattern.replacement);
   }
 
-  const originalJson = res.json;
-  res.json = function (body) {
-    const safeBody = maskPII(body);
-    return originalJson.call(this, safeBody);
-  };
+  // Apply international phone number redaction
+  result = redactPhoneNumbers(result);
+
+  return result;
+}
+
+/**
+ * Recursively redact sensitive data from an object.
+ */
+function redactSensitiveData(data: any): any {
+  if (data === null || data === undefined) return data;
+
+  if (typeof data === "string") {
+    return redactString(data);
+  }
+
+  if (Array.isArray(data)) {
+    return data.map((item) => redactSensitiveData(item));
+  }
+
+  if (typeof data === "object") {
+    const redacted: any = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (SENSITIVE_KEYS.has(key) && typeof value === "string") {
+        redacted[key] = "[REDACTED]";
+      } else {
+        redacted[key] = redactSensitiveData(value);
+      }
+    }
+    return redacted;
+  }
+
+  return data;
+}
+
+/**
+ * PII redaction middleware.
+ * Uses permission-based access control instead of hardcoded role names.
+ */
+export const redactPII = async (req: Request, res: Response, next: NextFunction) => {
+  const originalJson = res.json.bind(res);
+
+  res.json = ((data: any) => {
+    (async () => {
+      try {
+        let shouldRedact = true;
+
+        // Permission-based check (replaces hardcoded FULL_ACCESS_ROLES)
+        if (req.user?.id && req.orgId) {
+          shouldRedact = !(await hasPermission(
+            req.user.id,
+            req.orgId,
+            PERMISSIONS.VIEW_PII,
+          ));
+        }
+
+        if (shouldRedact) {
+          data = redactSensitiveData(data);
+        }
+
+        originalJson(data);
+      } catch {
+        // On failure, redact by default (secure fallback)
+        originalJson(redactSensitiveData(data));
+      }
+    })();
+  }) as any;
 
   next();
 };

@@ -14,18 +14,16 @@ export const generateInvoice = asyncHandler(async (req: Request, res: Response) 
   const { orderId } = generateInvoiceSchema.parse(req.body);
   const orgId = req.orgId!;
 
-  // 1. Fetch organization details to use dynamic business name & GST
-  const org = await storage.getOrganization(orgId);
-  if (!org) {
-    throw new AppError("Organization not found", 404);
-  }
+  // 1. Fetch business profile (dynamic tax rate, currency, identity)
+  const profile = await storage.getBusinessProfile(orgId);
 
   // 2. Generate Structured Invoice Data & Persist to DB
   const updatedOrder = await storage.generateAndAttachInvoice(orgId, orderId, (orderData, seq) => {
     return generateInvoiceData(orderData, {
       invoiceSequence: seq,
-      businessName: org.name,
-      gstNumber: org.gstNumber || "",
+      businessName: profile.businessName,
+      gstNumber: profile.gstNumber,
+      taxRatePercent: profile.taxRate,
     });
   });
 
