@@ -26,7 +26,6 @@ dist-ssr
 
 # Environment variables
 .env
-.env.test
 .env.production
 
 # Replit specific
