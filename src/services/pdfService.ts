@@ -81,7 +81,7 @@ export class PdfService {
     });
   }
 
-  // Upload PDF buffer to Azure Blob Storage and return a 15-minute SAS URL
+  // Upload PDF buffer to Azure Blob Storage (NO public URL returned — Phase 2 security)
   async uploadToStorage(fileName: string, fileBuffer: Buffer): Promise<string> {
     const sharedKeyCredential = new StorageSharedKeyCredential(
       env.AZURE_STORAGE_ACCOUNT_NAME,
@@ -99,9 +99,23 @@ export class PdfService {
       blobHTTPHeaders: { blobContentType: "application/pdf" },
     });
 
-    // Generate a SAS URL that expires in 15 minutes (Azure equivalent of AWS presigned URL)
+    // Return the blob path (NOT a public URL) — callers use generateDownloadUrl() for access
+    return fileName;
+  }
+
+  /**
+   * Generate a short-lived SAS URL for downloading a specific blob.
+   * Called on-demand by the download endpoint with auth checks already passed.
+   * Token expires in 5 minutes (Phase 2: minimize exposure window).
+   */
+  async generateDownloadUrl(fileName: string, expiryMinutes = 5): Promise<string> {
+    const sharedKeyCredential = new StorageSharedKeyCredential(
+      env.AZURE_STORAGE_ACCOUNT_NAME,
+      env.AZURE_STORAGE_ACCOUNT_KEY,
+    );
+
     const expiresOn = new Date();
-    expiresOn.setMinutes(expiresOn.getMinutes() + 15);
+    expiresOn.setMinutes(expiresOn.getMinutes() + expiryMinutes);
 
     const sasToken = generateBlobSASQueryParameters(
       {

@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+.github
+tests
+chats
+*.md
+.env
+.env.*
+.testcontainers-state.json
+coverage

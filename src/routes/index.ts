@@ -8,7 +8,7 @@ import { db } from "../config/db";
 import { sql } from "drizzle-orm";
 import { env } from "../config/env";
 import { logger } from "../middlewares/logger";
-import { getQueueHealth } from "../services/queueService";
+import { getQueueHealth, getFailedJobs, retryFailedJob, retryAllFailedJobs } from "../services/queueService";
 import { authHandler, requireOrg } from "../middlewares/authHandler";
 
 const router = Router();
@@ -82,6 +82,9 @@ router.get("/stats", generalLimiter, requireOrg, orderController.getStats);
 router.get("/orders", generalLimiter, requireOrg, redactPII, orderController.getOrders);
 router.get("/orders/:id", generalLimiter, requireOrg, redactPII, orderController.getOrderById);
 
+// Invoice Download: Auth + Org check → short-lived SAS token (Phase 2 security)
+router.get("/orders/:id/download", generalLimiter, requireOrg, invoiceController.downloadInvoice);
+
 // Write Operations: Strict Rate Limit + Input Sanitization
 router.post("/extract", extractLimiter, requireOrg, sanitizeInputs, orderController.extractOrder);
 router.post("/extract-order", extractLimiter, requireOrg, sanitizeInputs, orderController.extractChatOrder);
@@ -99,5 +102,28 @@ router.get("/queue/health", generalLimiter, orderController.getQueueStats);
 router.patch("/orders/:id/edit", extractLimiter, requireOrg, sanitizeInputs, orderController.editOrder);
 router.patch("/orders/:id", extractLimiter, requireOrg, sanitizeInputs, orderController.updateOrderStatus);
 router.delete("/orders/:id", extractLimiter, requireOrg, orderController.deleteOrder);
+
+// ==========================================
+// DLQ / Admin Routes (Phase 3)
+// ==========================================
+router.get("/admin/dlq", generalLimiter, requireOrg, async (_req, res) => {
+  const start = Number(_req.query.start) || 0;
+  const end = Number(_req.query.end) || 20;
+  const jobs = await getFailedJobs(start, end);
+  res.json({ count: jobs.length, jobs });
+});
+
+router.post("/admin/dlq/:jobId/retry", extractLimiter, requireOrg, async (req, res) => {
+  const success = await retryFailedJob(req.params.jobId);
+  if (!success) {
+    return res.status(404).json({ message: "Job not found or not in failed state" });
+  }
+  res.json({ message: "Job retried successfully", jobId: req.params.jobId });
+});
+
+router.post("/admin/dlq/retry-all", extractLimiter, requireOrg, async (_req, res) => {
+  const count = await retryAllFailedJobs();
+  res.json({ message: `${count} jobs retried`, count });
+});
 
 export default router;

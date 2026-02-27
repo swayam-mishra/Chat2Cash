@@ -1,4 +1,8 @@
+import Decimal from "decimal.js";
 import type { ExtractedChatOrder, Invoice, InvoiceItem } from "../schema";
+
+// Configure Decimal.js for financial precision
+Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 
 export interface InvoiceOptions {
   businessName?: string;
@@ -30,50 +34,50 @@ export const generateInvoiceData = (
   const seqStr = String(invoiceSequence).padStart(3, '0');
   const invoice_number = `INV-${year}-${seqStr}`;
 
-  // 2. Rounding & Precision: Perform all math in Paise (integers)
-  let subtotalPaise = 0;
+  // 2. Precision-safe math using Decimal.js (eliminates IEEE 754 float errors)
+  let subtotal = new Decimal(0);
 
   const invoiceItems: InvoiceItem[] = order.items.map((item) => {
-    const priceRupees = item.price ?? 0;
-    // Convert to integers before multiplying
-    const pricePaise = Math.round(priceRupees * 100);
-    const amountPaise = pricePaise * item.quantity;
-    
-    subtotalPaise += amountPaise;
+    const price = new Decimal(item.price ?? 0);
+    const quantity = new Decimal(item.quantity);
+    const amount = price.times(quantity).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+
+    subtotal = subtotal.plus(amount);
 
     return { 
       product_name: item.product_name, 
       quantity: item.quantity, 
-      price: priceRupees, // keep display price in rupees
-      amount: amountPaise / 100 // convert back to rupees for display
+      price: price.toNumber(),       // keep display price in rupees
+      amount: amount.toNumber(),     // precise line total
     };
   });
 
-  // 3. Dynamic Tax Calculations (in Paise)
-  let cgstPaise = 0;
-  let sgstPaise = 0;
-  let igstPaise = 0;
+  // 3. Dynamic Tax Calculations using Decimal.js
+  const taxRate = new Decimal(taxRatePercent);
+  let cgst = new Decimal(0);
+  let sgst = new Decimal(0);
+  let igst = new Decimal(0);
 
   if (isInterstate) {
-    igstPaise = Math.round((subtotalPaise * taxRatePercent) / 100);
+    igst = subtotal.times(taxRate).div(100).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
   } else {
-    const halfTax = taxRatePercent / 2;
-    cgstPaise = Math.round((subtotalPaise * halfTax) / 100);
-    sgstPaise = Math.round((subtotalPaise * halfTax) / 100);
+    const halfRate = taxRate.div(2);
+    cgst = subtotal.times(halfRate).div(100).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+    sgst = subtotal.times(halfRate).div(100).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
   }
 
-  const totalPaise = subtotalPaise + cgstPaise + sgstPaise + igstPaise;
+  const total = subtotal.plus(cgst).plus(sgst).plus(igst);
 
   return {
     invoice_number,
     date: dateStr,
     customer_name: order.customer_name || "Customer",
     items: invoiceItems,
-    subtotal: subtotalPaise / 100,      // Convert final integers back to Rupees
-    cgst: cgstPaise / 100,
-    sgst: sgstPaise / 100,
-    igst: isInterstate ? igstPaise / 100 : undefined,
-    total: totalPaise / 100,
+    subtotal: subtotal.toNumber(),
+    cgst: cgst.toNumber(),
+    sgst: sgst.toNumber(),
+    igst: isInterstate ? igst.toNumber() : undefined,
+    total: total.toNumber(),
     business_name: businessName,
     gst_number: gstNumber,
   };

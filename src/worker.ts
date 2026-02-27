@@ -1,5 +1,5 @@
 import "./config/env"; // Load and validate env vars before anything else
-import { startExtractionWorker, shutdownQueue } from "./services/queueService";
+import { startExtractionWorker, startWebhookWorker, shutdownQueue } from "./services/queueService";
 import { log, logError } from "./middlewares/logger";
 import { db } from "./config/db";
 import { sql } from "drizzle-orm";
@@ -16,9 +16,10 @@ const start = async () => {
     process.exit(1);
   }
 
-  // Start the BullMQ processor
+  // Start both BullMQ processors (Phase 3: decoupled queues)
   startExtractionWorker();
-  log("Extraction worker is running and polling for jobs", "worker");
+  startWebhookWorker();
+  log("Extraction + Webhook workers running and polling for jobs", "worker");
 };
 
 const shutdown = async (signal: string) => {

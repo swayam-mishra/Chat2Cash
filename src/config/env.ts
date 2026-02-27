@@ -40,6 +40,12 @@ const envSchema = z.object({
   AZURE_STORAGE_ACCOUNT_NAME: z.string().min(1, "AZURE_STORAGE_ACCOUNT_NAME is required"),
   AZURE_STORAGE_ACCOUNT_KEY: z.string().min(1, "AZURE_STORAGE_ACCOUNT_KEY is required"),
   AZURE_STORAGE_CONTAINER_NAME: z.string().default("invoices"),
+
+  // Sentry (optional — Phase 5)
+  SENTRY_DSN: z.string().url().optional(),
+
+  // Database CA Certificate (optional — for production SSL)
+  DATABASE_CA_CERT: z.string().optional(),
 });
 
 // Validate and export

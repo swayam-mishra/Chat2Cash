@@ -1,6 +1,18 @@
 import pino from "pino";
+import crypto from "crypto";
 import { Request, Response, NextFunction } from "express";
 import { env } from "../config/env";
+import { AsyncLocalStorage } from "async_hooks";
+
+// ── Correlation ID Store (Phase 5) ─────────────────────────────
+// AsyncLocalStorage propagates the correlation ID through the entire
+// request lifecycle without passing it as a function argument.
+export const requestContext = new AsyncLocalStorage<{ correlationId: string }>();
+
+/** Get the current correlation ID (returns "no-context" outside a request) */
+export function getCorrelationId(): string {
+  return requestContext.getStore()?.correlationId ?? "no-context";
+}
 
 // Define keys that contain PII for masking
 const SENSITIVE_KEYS = ["customerName", "customerPhone", "customer_name", "customer_phone", "phone", "deliveryAddress", "delivery_address", "gst_number"];
@@ -20,11 +32,26 @@ export const logger = pino({
     paths: SENSITIVE_KEYS.flatMap(key => [`req.body.${key}`, `res.body.${key}`, `*.${key}`]),
     censor: "***REDACTED***",
   },
+  // Inject correlation ID into every log entry automatically
+  mixin() {
+    return { correlationId: getCorrelationId() };
+  },
 });
 
 // Backward compatibility helpers for your existing code
 export const log = (msg: string, source = "info") => logger.info({ source }, msg);
 export const logError = (msg: string, error?: any) => logger.error({ err: error }, msg);
+
+/** Middleware: Assign a unique correlation ID to every request (Phase 5) */
+export function correlationId(req: Request, _res: Response, next: NextFunction) {
+  const id = (req.headers["x-correlation-id"] as string) || crypto.randomUUID();
+  // Store in AsyncLocalStorage so all downstream code (including worker jobs) can access it
+  requestContext.run({ correlationId: id }, () => {
+    // Also set on the response header for client-side tracing
+    _res.setHeader("x-correlation-id", id);
+    next();
+  });
+}
 
 export function requestLogger(req: Request, res: Response, next: NextFunction) {
   const start = Date.now();

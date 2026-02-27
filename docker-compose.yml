@@ -23,8 +23,12 @@ services:
   redis:
     image: redis:7-alpine
     restart: always
+    # Phase 3: Enable AOF persistence — prevents job loss on Redis crash
+    command: redis-server --appendonly yes --appendfsync everysec
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -75,3 +79,4 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
