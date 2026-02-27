@@ -39,7 +39,8 @@ export const extractionQueue = new Queue("order-extraction", {
 // ==========================================
 export interface ExtractionJobData {
   type: "single_message" | "chat_log";
-  message?: string;          // For single message extraction
+  orgId: string;              // Organization context for multi-tenancy
+  message?: string;           // For single message extraction
   messages?: ChatMessage[];   // For chat extraction
   webhookUrl?: string;        // Optional callback URL
 }
@@ -67,14 +68,17 @@ export function startExtractionWorker(): Worker {
 
       let savedOrder;
 
+      const { orgId } = job.data;
+      if (!orgId) throw new Error("Invalid job data: missing orgId");
+
       if (job.data.type === "single_message" && job.data.message) {
         const order = await anthropicService.extractOrderFromMessage(job.data.message);
         await job.updateProgress(70);
-        savedOrder = await storage.addOrder(order);
+        savedOrder = await storage.addOrder(orgId, order);
       } else if (job.data.type === "chat_log" && job.data.messages) {
         const order = await anthropicService.extractOrderFromChat(job.data.messages);
         await job.updateProgress(70);
-        savedOrder = await storage.addChatOrder(order);
+        savedOrder = await storage.addChatOrder(orgId, order);
       } else {
         throw new Error("Invalid job data: missing message or messages");
       }

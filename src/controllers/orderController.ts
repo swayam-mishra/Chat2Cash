@@ -110,6 +110,7 @@ export const asyncExtractOrder = asyncHandler(async (req: Request, res: Response
 
   const jobId = await addExtractionJob({
     type: "single_message",
+    orgId: req.orgId!,
     message,
     webhookUrl,
   });
@@ -128,6 +129,7 @@ export const asyncExtractChatOrder = asyncHandler(async (req: Request, res: Resp
 
   const jobId = await addExtractionJob({
     type: "chat_log",
+    orgId: req.orgId!,
     messages,
     webhookUrl,
   });
