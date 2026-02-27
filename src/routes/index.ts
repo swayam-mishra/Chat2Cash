@@ -114,7 +114,7 @@ router.get("/admin/dlq", generalLimiter, requireOrg, async (_req, res) => {
 });
 
 router.post("/admin/dlq/:jobId/retry", extractLimiter, requireOrg, async (req, res) => {
-  const success = await retryFailedJob(req.params.jobId);
+  const success = await retryFailedJob(req.params.jobId as string);
   if (!success) {
     return res.status(404).json({ message: "Job not found or not in failed state" });
   }

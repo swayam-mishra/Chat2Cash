@@ -1,11 +1,10 @@
 import { storage } from "./storageService";
 
-export const getOrderStats = async () => {
-  // CHANGED: Let the database calculate these via aggregation queries
-  const total_orders = await storage.getChatOrdersCount();
-  const pending_payments = await storage.getChatOrdersCount("pending");
-  const total_revenue = await storage.getTotalRevenue();
-  const recent_orders = await storage.getChatOrders(10, 0); // Limit to 10 for dashboard
+export const getOrderStats = async (orgId: string) => {
+  const total_orders = await storage.getChatOrdersCount(orgId);
+  const pending_payments = await storage.getChatOrdersCount(orgId, "pending");
+  const total_revenue = await storage.getTotalRevenue(orgId);
+  const recent_orders = await storage.getChatOrders(orgId, 10, 0);
   
   return {
     total_orders,
@@ -15,13 +14,12 @@ export const getOrderStats = async () => {
   };
 };
 
-export const getAllOrders = async (page: number = 1, limit: number = 50) => {
-  // CHANGED: Implementing pagination logic
+export const getAllOrders = async (orgId: string, page: number = 1, limit: number = 50) => {
   const offset = (page - 1) * limit;
   
-  const orders = await storage.getChatOrders(limit, offset);
-  const total = await storage.getChatOrdersCount();
-  const pending = await storage.getChatOrdersCount("pending");
+  const orders = await storage.getChatOrders(orgId, limit, offset);
+  const total = await storage.getChatOrdersCount(orgId);
+  const pending = await storage.getChatOrdersCount(orgId, "pending");
   
   return {
     orders,

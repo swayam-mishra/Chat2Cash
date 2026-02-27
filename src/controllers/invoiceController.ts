@@ -53,7 +53,7 @@ export const generateInvoice = asyncHandler(async (req: Request, res: Response) 
  * after verifying auth + org ownership. Redirects the client to the signed URL.
  */
 export const downloadInvoice = asyncHandler(async (req: Request, res: Response) => {
-  const orderId = req.params.id;
+  const orderId = req.params.id as string;
   const orgId = req.orgId!;
 
   // 1. Verify the order belongs to this org
