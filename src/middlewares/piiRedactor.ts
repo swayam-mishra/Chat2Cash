@@ -12,7 +12,7 @@ const PHONE_REGIONS = ["IN", "US", "GB", "CA", "AU", "DE", "FR", "JP", "SG"];
  * Detects and redacts phone numbers in any international format
  * using google-libphonenumber instead of hardcoded +91 regex.
  */
-function redactPhoneNumbers(text: string): string {
+export function redactPhoneNumbers(text: string): string {
   const matches = text.match(/[+]?[\d\s\-()]{7,20}/g);
   if (!matches) return text;
 
@@ -36,7 +36,7 @@ function redactPhoneNumbers(text: string): string {
 /**
  * Redact string values using all configured PII patterns + international phone parsing.
  */
-function redactString(value: string): string {
+export function redactString(value: string): string {
   let result = value;
 
   // Apply regex patterns from config
@@ -53,7 +53,7 @@ function redactString(value: string): string {
 /**
  * Recursively redact sensitive data from an object.
  */
-function redactSensitiveData(data: any): any {
+export function redactSensitiveData(data: any): any {
   if (data === null || data === undefined) return data;
 
   if (typeof data === "string") {

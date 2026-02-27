@@ -1,21 +1,8 @@
-import "./config/env";
-import express from "express";
-import cors from "cors";
-import router from "./routes";
-import { log, requestLogger } from "./middlewares/logger";
-import { globalErrorHandler } from "./middlewares/errorHandler";
+import app from "./app";
+import { log } from "./middlewares/logger";
 import { env } from "./config/env";
 
-const app = express();
 const PORT = env.PORT;
-
-app.use(cors());
-app.use(express.json());
-app.use(requestLogger);
-
-app.use("/api", router);
-
-app.use(globalErrorHandler);
 
 const server = app.listen(PORT, () => {
   log(`Server running on http://localhost:${PORT}`, "info");
