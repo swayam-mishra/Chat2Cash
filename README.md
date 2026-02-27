@@ -32,22 +32,22 @@ I built this project watching my mother run her clothing business. Every day, sh
 - **Context Aware**: Distinguishes between inquiries ("price kya hai?") and confirmed orders ("book kar do").
 - **Smart Parsing**: Extracts items, quantities, units, delivery dates, and special instructions from unstructured text.
 
-### Enterprise-Grade Architecture
-- **Async Processing**: Uses **BullMQ & Redis** to handle high-volume chat logs without blocking the main thread.
-- **Robust Data Layer**: Built on **PostgreSQL** with **Drizzle ORM** for type-safe, normalized data storage.
-- **Security First**: 
-    - **PII Redaction Middleware**: Automatically masks phone numbers and names in logs/responses for privacy.
-    - **Input Sanitization**: Prevents injection attacks.
-    - **Rate Limiting**: Strict limits for AI endpoints to prevent abuse/billing spikes.
+### Enterprise-Grade Distributed Architecture
+- **Decoupled API & Worker Tiers**: Horizontally scalable architecture where the API server handles HTTP requests, while dedicated worker nodes process heavy AI extraction and webhooks independently.
+- **Robust Queueing**: Uses **BullMQ & Redis** with AOF (Append Only File) persistence enabled to guarantee zero job loss during crashes.
+- **Multi-Queue System**: Dedicated processors for Extraction jobs and Webhook deliveries.
+- **Data Layer**: Built on **PostgreSQL** with **Drizzle ORM** for type-safe, normalized data storage.
+
+### Security & Observability 
+- **Tracing & Error Tracking**: Integrated with **Sentry** for real-time error monitoring and crash reporting.
+- **Structured Logging**: Uses Pino with auto-generated **Correlation IDs** to trace requests seamlessly across the API and worker boundaries.
+- **Security Headers & Sanitization**: Secured via `Helmet`, input sanitization to prevent injection attacks, and strict rate limiting.
+- **PII Redaction**: Middleware automatically masks phone numbers and names in logs/responses for privacy compliance.
 
 ### Instant Invoicing
 - **One-Click Generation**: Converts chat data into professional PDF invoices using `PDFKit`.
 - **GST Compliant**: Automatically calculates CGST/SGST/IGST breakdowns.
 - **Sequential Numbering**: Manages invoice sequences automatically.
-
-### Business Health Checks
-- **Real-time Stats**: Track total revenue, pending orders, and conversion rates.
-- **System Health**: Dedicated `/health` endpoint monitoring Database, Redis, and Anthropic API latency.
 
 ---
 
@@ -55,12 +55,12 @@ I built this project watching my mother run her clothing business. Every day, sh
 
 - **Runtime**: Node.js & TypeScript
 - **Framework**: Express.js
-- **Database**: PostgreSQL (via Neon/Supabase)
+- **Database**: PostgreSQL
 - **ORM**: Drizzle ORM
 - **Queue/Cache**: Redis & BullMQ
 - **AI Engine**: Anthropic Claude 3.5 Sonnet
-- **Validation**: Zod
-- **Logging**: Pino (with PII redaction)
+- **Observability**: Sentry & Pino (with Correlation IDs)
+- **Security**: Helmet, Zod validation
 - **PDF Generation**: PDFKit
 
 ---
@@ -100,46 +100,62 @@ I built this project watching my mother run her clothing business. Every day, sh
 ## Getting Started
 
 ### Prerequisites
-- Node.js v18+
+- Docker & Docker Compose (Recommended)
+- Node.js v18+ (for local development)
 - PostgreSQL Database
 - Redis Server (for async queues)
 - Anthropic API Key
+- Sentry DSN (Optional, for error tracking)
 
-### Installation
+### Installation (Docker - Recommended)
+
+The easiest way to run the full distributed stack (Database, Redis, API, and Workers) is via Docker Compose:
 
 1. **Clone the repository**
-``` Bash
-git clone [https://github.com/yourusername/chat2cash.git](https://github.com/yourusername/chat2cash.git) cd chat2cash
+``` bash
+git clone [https://github.com/yourusername/chat2cash.git]
+cd chat2cash
+``` 
+
+2. **Environment Setup** Create a `.env` file in the root:
+
+``` Code snippet
+ANTHROPIC_API_KEY="sk-ant-api03-..."
+SENTRY_DSN="https://your-sentry-dsn@sentry.io/..." # Optional
+DEFAULT_BUSINESS_NAME="My Saree Shop"
+DEFAULT_GST_NUMBER="22AAAAA0000A1Z5"
 ```
-2. **Install Dependencies**
+
+3. **Run the Stack**
+
+``` Bash
+docker-compose up --build
+```
+
+_Note: The `docker-compose.yml` automatically scales the worker tier to 2 replicas out of the box._
+
+### Manual Installation
+
+1. **Install Dependencies**
+
 ``` Bash
 npm install
 ```
-3. **Environment Setup** Create a `.env` file in the root:
-``` code Snippet
-    PORT=3000
-    NODE_ENV=development
-    
-    # Database
-    DATABASE_URL="postgresql://user:pass@localhost:5432/chat2cash"
-    
-    # Redis (Required for Queues)
-    REDIS_URL="redis://localhost:6379"
-    
-    # AI
-    ANTHROPIC_API_KEY="sk-ant-api03-..."
-    
-    # Business Config
-    DEFAULT_BUSINESS_NAME="My Saree Shop"
-    DEFAULT_GST_NUMBER="22AAAAA0000A1Z5"
-```
-4. **Database Migration** Push the schema to your Postgres instance:
-``` Bash    
+
+2. **Environment Setup** (Add standard DB and Redis URLs to your `.env` alongside the variables above)
+
+3. **Database Migration** 
+``` bash
 npm run db:push
 ```
-5. **Run the Server**
-``` Bash
+4. **Run the API Server**
+```bash
 npm run dev
+````
+
+5. **Run the Worker Node** (In a separate terminal)
+``` Bash
+npm run dev:worker
 ```
 
 ---
@@ -147,12 +163,13 @@ npm run dev
 
 ```
 src/
-├── config/         # DB, Env, and App Configs
+├── config/         # DB, Env, Sentry, and App Configs
 ├── controllers/    # Request Handlers
-├── middlewares/    # Error Handling, Logging, Auth, PII Redaction
+├── middlewares/    # Error Handling, Sentry, Logging (Correlation IDs), PII Redaction
 ├── routes/         # API Route Definitions
 ├── services/       # Business Logic (AI, PDF, Queue, Storage)
-├── index.ts        # Entry Point
+├── index.ts        # API Entry Point
+├── worker.ts       # Standalone Worker Entry Point
 └── schema.ts       # Drizzle ORM Schema & Zod Types
 ```
 
@@ -162,10 +179,16 @@ src/
 Contributions are welcome!
 
 1. Fork the Project
+    
 2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+    
 3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+    
 4. Push to the Branch (`git push origin feature/AmazingFeature`)
+    
 5. Open a Pull Request
+    
+
 ---
 
 _Built with ❤️ for the 60 million SMBs of India._
