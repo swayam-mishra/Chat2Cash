@@ -14,7 +14,6 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
     "@azure/storage-blob": "^12.31.0",
-    "@supabase/supabase-js": "^2.97.0",
     "bullmq": "^5.70.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
@@ -23,6 +22,7 @@
     "express-rate-limit": "^7.4.1",
     "google-libphonenumber": "^3.2.44",
     "ioredis": "^5.9.3",
+    "jose": "^6.1.3",
     "node-fetch": "^3.3.2",
     "pdfkit": "^0.17.2",
     "pg": "^8.13.1",

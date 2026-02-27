@@ -232,9 +232,9 @@ export const rolesTable = pgTable("roles", {
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 });
 
-// USERS TABLE (Mirrors Supabase Auth)
+// USERS TABLE (Mirrors Neon Auth)
 export const usersTable = pgTable("users", {
-  id: text("id").primaryKey(), // Matches Supabase auth.uid()
+  id: text("id").primaryKey(), // Matches neon_auth.user.id
   email: text("email").notNull(),
   name: text("name"),
 

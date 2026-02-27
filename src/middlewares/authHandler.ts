@@ -1,16 +1,13 @@
 import { Request, Response, NextFunction } from "express";
-import { createClient } from "@supabase/supabase-js";
 import { db } from "../config/db";
 import { usersTable, apiKeysTable } from "../schema";
 import { eq, and } from "drizzle-orm";
 import { AppError } from "./errorHandler";
 import { env } from "../config/env";
 import crypto from "crypto";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 
-// Initialize Supabase Client (Auth only)
-const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
-
-// Extend Express Request to include User and Org info
+// Extend Express Request
 declare global {
   namespace Express {
     interface Request {
@@ -20,13 +17,16 @@ declare global {
   }
 }
 
+// Initialize Neon JWKS Set for token verification
+const JWKS = createRemoteJWKSet(new URL(env.NEON_JWKS_URL));
+
 export const authHandler = async (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
   const apiKeyHeader = req.headers["x-api-key"] as string;
 
   try {
     // ===============================================
-    // PATH 1: MACHINE ACCESS (API KEY)
+    // PATH 1: MACHINE ACCESS (API KEY) - NO CHANGES
     // ===============================================
     if (apiKeyHeader) {
       const hash = crypto.createHash("sha256").update(apiKeyHeader).digest("hex");
@@ -44,47 +44,51 @@ export const authHandler = async (req: Request, res: Response, next: NextFunctio
     }
 
     // ===============================================
-    // PATH 2: HUMAN ACCESS (SUPABASE JWT)
+    // PATH 2: HUMAN ACCESS (NEON AUTH JWT)
     // ===============================================
     if (authHeader?.startsWith("Bearer ")) {
       const token = authHeader.split(" ")[1];
 
-      // A. Verify Token with Supabase
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser(token);
-      if (error || !user) throw new AppError("Invalid or Expired Token", 401);
+      try {
+        // A. Verify Token locally with Neon JWKS
+        const { payload } = await jwtVerify(token, JWKS);
 
-      // B. JIT Sync: Check if user exists in Neon
-      const existingUser = await db
-        .select()
-        .from(usersTable)
-        .where(eq(usersTable.id, user.id))
-        .limit(1);
+        // Neon Auth JWT payload contains 'sub' (User ID) and 'email'
+        const userId = payload.sub as string;
+        const userEmail = payload.email as string;
 
-      if (existingUser.length > 0) {
-        req.user = existingUser[0];
-      } else {
-        // C. User doesn't exist in Neon yet — create them now (Just-In-Time provisioning)
-        const [newUser] = await db
-          .insert(usersTable)
-          .values({
-            id: user.id, // Matches Supabase auth.uid()
-            email: user.email!,
-            name: user.user_metadata?.full_name ?? "Unknown",
-            // organizationId is null until they create or join an org
-          })
-          .returning();
-        req.user = newUser;
+        // B. JIT Sync: Check if user exists in your app's public.users table
+        const existingUser = await db
+          .select()
+          .from(usersTable)
+          .where(eq(usersTable.id, userId))
+          .limit(1);
+
+        if (existingUser.length > 0) {
+          req.user = existingUser[0];
+        } else {
+          // C. User doesn't exist in public.users yet — create them
+          const [newUser] = await db
+            .insert(usersTable)
+            .values({
+              id: userId, // Matches neon_auth.user.id
+              email: userEmail,
+              name: (payload.name as string) ?? "Unknown",
+              // organizationId is null until they create or join an org
+            })
+            .returning();
+          req.user = newUser;
+        }
+
+        // D. Set org context
+        if (req.user?.organizationId) {
+          req.orgId = req.user.organizationId;
+        }
+
+        return next();
+      } catch (jwtError) {
+        throw new AppError("Invalid or Expired Token", 401);
       }
-
-      // D. Set org context from the user record
-      if (req.user?.organizationId) {
-        req.orgId = req.user.organizationId;
-      }
-
-      return next();
     }
 
     throw new AppError("Authentication required", 401);
@@ -93,10 +97,6 @@ export const authHandler = async (req: Request, res: Response, next: NextFunctio
   }
 };
 
-/**
- * Guard middleware: ensures the authenticated identity belongs to an organization.
- * Use after authHandler on routes that strictly require an org context.
- */
 export const requireOrg = (req: Request, res: Response, next: NextFunction) => {
   if (!req.orgId) {
     return next(new AppError("User is not part of an Organization", 403));

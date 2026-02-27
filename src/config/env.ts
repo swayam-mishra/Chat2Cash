@@ -32,9 +32,9 @@ const envSchema = z.object({
   // Redis (for BullMQ async job queue)
   REDIS_URL: z.string().url().default("redis://localhost:6379"),
   
-  // Supabase (Auth)
-  SUPABASE_URL: z.string().url("SUPABASE_URL must be a valid URL"),
-  SUPABASE_ANON_KEY: z.string().min(1, "SUPABASE_ANON_KEY is required"),
+  // Neon Auth
+  NEON_AUTH_URL: z.string().url("NEON_AUTH_URL is required"),
+  NEON_JWKS_URL: z.string().url("NEON_JWKS_URL is required"),
 
   // Azure Blob Storage (invoice PDFs)
   AZURE_STORAGE_ACCOUNT_NAME: z.string().min(1, "AZURE_STORAGE_ACCOUNT_NAME is required"),

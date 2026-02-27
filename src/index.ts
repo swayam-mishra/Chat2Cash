@@ -1,4 +1,4 @@
-import "./config/env"; // Validate ENV before anything else
+import "./config/env";
 import express from "express";
 import cors from "cors";
 import router from "./routes";
@@ -7,7 +7,7 @@ import { globalErrorHandler } from "./middlewares/errorHandler";
 import { env } from "./config/env";
 
 const app = express();
-const PORT = env.PORT; // Type-safe access
+const PORT = env.PORT;
 
 app.use(cors());
 app.use(express.json());
