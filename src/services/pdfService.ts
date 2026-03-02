@@ -9,8 +9,7 @@ import {
 import { env } from "../config/env";
 
 export class PdfService {
-  
-  // Generates PDF and returns it as a Buffer (can be streamed to S3 or Client)
+  /** Generates a PDF invoice and returns it as a Buffer. */
   async generateInvoicePDF(invoice: Invoice): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ margin: 50 });
@@ -20,9 +19,6 @@ export class PdfService {
       doc.on("end", () => resolve(Buffer.concat(buffers)));
       doc.on("error", (err) => reject(err));
 
-      // --- PDF CONTENT ---
-      
-      // Header
       doc.fontSize(20).text("INVOICE", { align: "center" });
       doc.moveDown();
       
@@ -30,13 +26,11 @@ export class PdfService {
       doc.text(`GSTIN: ${invoice.gst_number}`, { align: "right" });
       doc.moveDown();
 
-      // Details
       doc.text(`Invoice Number: ${invoice.invoice_number}`);
       doc.text(`Date: ${invoice.date}`);
       doc.text(`Customer: ${invoice.customer_name}`);
       doc.moveDown();
 
-      // Table Header
       const tableTop = doc.y;
       doc.font("Helvetica-Bold");
       doc.text("Item", 50, tableTop);
@@ -48,7 +42,6 @@ export class PdfService {
       doc.font("Helvetica");
       doc.moveDown(0.5);
 
-      // Items
       invoice.items.forEach((item) => {
         const y = doc.y;
         doc.text(item.product_name, 50, y);
@@ -62,10 +55,9 @@ export class PdfService {
       doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke();
       doc.moveDown();
 
-      // Totals
       const totalX = 350;
       doc.text("Subtotal:", totalX);
-      doc.text(invoice.subtotal.toFixed(2), 450, doc.y - 12); // align with label
+      doc.text(invoice.subtotal.toFixed(2), 450, doc.y - 12);
       
       doc.text(`CGST:`, totalX);
       doc.text(invoice.cgst.toFixed(2), 450, doc.y - 12);
@@ -75,13 +67,13 @@ export class PdfService {
       
       doc.font("Helvetica-Bold");
       doc.text("Total:", totalX, doc.y + 5);
-      doc.text(invoice.total.toFixed(2), 450, doc.y - 12); // align with label
+      doc.text(invoice.total.toFixed(2), 450, doc.y - 12);
 
       doc.end();
     });
   }
 
-  // Upload PDF buffer to Azure Blob Storage (NO public URL returned — Phase 2 security)
+  /** Uploads a PDF buffer to Azure Blob Storage. Returns the blob path. */
   async uploadToStorage(fileName: string, fileBuffer: Buffer): Promise<string> {
     const sharedKeyCredential = new StorageSharedKeyCredential(
       env.AZURE_STORAGE_ACCOUNT_NAME,
@@ -99,14 +91,13 @@ export class PdfService {
       blobHTTPHeaders: { blobContentType: "application/pdf" },
     });
 
-    // Return the blob path (NOT a public URL) — callers use generateDownloadUrl() for access
+    // Return the blob path — callers use generateDownloadUrl() to get a signed URL
     return fileName;
   }
 
   /**
-   * Generate a short-lived SAS URL for downloading a specific blob.
-   * Called on-demand by the download endpoint with auth checks already passed.
-   * Token expires in 5 minutes (Phase 2: minimize exposure window).
+   * Generates a short-lived SAS URL for downloading a specific blob.
+   * Token expires after `expiryMinutes` (default 5).
    */
   async generateDownloadUrl(fileName: string, expiryMinutes = 5): Promise<string> {
     const sharedKeyCredential = new StorageSharedKeyCredential(

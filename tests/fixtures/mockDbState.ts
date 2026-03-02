@@ -29,8 +29,6 @@ import type * as schema from "../../src/schema";
 // Re-export the DB type used throughout tests
 export type TestDb = NodePgDatabase<typeof schema>;
 
-// ── Constants ──────────────────────────────────────────────────
-
 /** Raw API key value tests will send in the `x-api-key` header */
 export const TEST_API_KEY_RAW = "test-api-key-secret-12345";
 
@@ -39,8 +37,6 @@ const TEST_API_KEY_HASH = crypto
   .createHash("sha256")
   .update(TEST_API_KEY_RAW)
   .digest("hex");
-
-// ── Seed helpers ───────────────────────────────────────────────
 
 export interface SeededOrg {
   org: typeof organizationsTable.$inferSelect;

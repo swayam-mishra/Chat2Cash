@@ -10,7 +10,6 @@ import { env } from "./config/env";
 
 const app = express();
 
-// ── Sentry Error Tracking (Phase 5) ─────────────────────────
 if (env.SENTRY_DSN) {
   Sentry.init({
     dsn: env.SENTRY_DSN,
@@ -23,18 +22,16 @@ if (env.SENTRY_DSN) {
   });
 }
 
-// ── Security Headers (Phase 2) ──────────────────────────────
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-// ── Correlation ID + Request Logging (Phase 5) ──────────────
 app.use(correlationId);
 app.use(requestLogger);
 
 app.use("/api", router);
 
-// ── Sentry Error Handler (must be before globalErrorHandler) ─
+// Sentry error handler must be registered before the global error handler
 if (env.SENTRY_DSN) {
   Sentry.setupExpressErrorHandler(app);
 }

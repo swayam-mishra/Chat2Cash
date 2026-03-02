@@ -23,9 +23,7 @@ import {
   type SeededOrg,
 } from "../../fixtures/mockDbState";
 
-// ── Bootstrap ──────────────────────────────────────────────────
-// Import the Express app AFTER test-env.ts has set DATABASE_URL
-// so that src/config/db.ts connects to the Testcontainers instance.
+// Import app after test-env.ts sets DATABASE_URL
 import app from "../../../src/app";
 
 let testDb: TestDb;
@@ -43,8 +41,6 @@ afterAll(async () => {
   await pool.end();
 });
 
-// ── Helpers ────────────────────────────────────────────────────
-
 /** Authenticated GET request scoped to the seeded org */
 const authGet = (path: string) =>
   request(app).get(path).set("x-api-key", TEST_API_KEY_RAW);
@@ -57,9 +53,7 @@ const authPatch = (path: string) =>
 const authDelete = (path: string) =>
   request(app).delete(path).set("x-api-key", TEST_API_KEY_RAW);
 
-// ================================================================
-// GET /api/orders
-// ================================================================
+// --- GET /api/orders ---
 
 describe("GET /api/orders", () => {
   beforeEach(async () => {
@@ -125,9 +119,7 @@ describe("GET /api/orders", () => {
   });
 });
 
-// ================================================================
-// GET /api/orders/:id
-// ================================================================
+// --- GET /api/orders/:id ---
 
 describe("GET /api/orders/:id", () => {
   beforeEach(async () => {
@@ -156,9 +148,7 @@ describe("GET /api/orders/:id", () => {
   });
 });
 
-// ================================================================
-// PATCH /api/orders/:id  (update status)
-// ================================================================
+// --- PATCH /api/orders/:id ---
 
 describe("PATCH /api/orders/:id", () => {
   beforeEach(async () => {
@@ -186,9 +176,7 @@ describe("PATCH /api/orders/:id", () => {
   });
 });
 
-// ================================================================
-// DELETE /api/orders/:id
-// ================================================================
+// --- DELETE /api/orders/:id ---
 
 describe("DELETE /api/orders/:id", () => {
   beforeEach(async () => {
@@ -215,9 +203,7 @@ describe("DELETE /api/orders/:id", () => {
   });
 });
 
-// ================================================================
-// Auth / Error-handling edge cases
-// ================================================================
+// --- Auth / Error handling ---
 
 describe("Authentication & error handling", () => {
   beforeEach(async () => {

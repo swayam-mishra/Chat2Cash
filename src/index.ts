@@ -9,7 +9,6 @@ const server = app.listen(PORT, () => {
   log(`Environment: ${env.NODE_ENV}`, "info");
 });
 
-// Graceful shutdown — API does not own the queue worker any more
 const shutdown = (signal: string) => {
   log(`${signal} received. Shutting down API...`, "info");
   server.close(() => {

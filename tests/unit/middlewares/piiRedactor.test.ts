@@ -5,14 +5,7 @@ import {
   redactSensitiveData,
 } from "../../../src/middlewares/piiRedactor";
 
-// ════════════════════════════════════════════════════════════════
-// PII Redactor — Unit Tests (No DB / Redis / Express required)
-// ════════════════════════════════════════════════════════════════
-
 describe("piiRedactor", () => {
-  // ──────────────────────────────────────────────────────────────
-  // redactString — regex-based pattern matching
-  // ──────────────────────────────────────────────────────────────
   describe("redactString", () => {
     // --- Emails ---
     it("should redact a simple email address", () => {
@@ -102,9 +95,6 @@ describe("piiRedactor", () => {
     });
   });
 
-  // ──────────────────────────────────────────────────────────────
-  // redactPhoneNumbers — google-libphonenumber based
-  // ──────────────────────────────────────────────────────────────
   describe("redactPhoneNumbers", () => {
     it("should redact Indian phone numbers with +91 prefix", () => {
       const result = redactPhoneNumbers("Call me at +91 98765 43210");
@@ -147,9 +137,6 @@ describe("piiRedactor", () => {
     });
   });
 
-  // ──────────────────────────────────────────────────────────────
-  // redactSensitiveData — recursive object redaction
-  // ──────────────────────────────────────────────────────────────
   describe("redactSensitiveData", () => {
     it("should redact SENSITIVE_KEYS with [REDACTED]", () => {
       const data = {

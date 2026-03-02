@@ -2,7 +2,6 @@ import { db } from "../config/db";
 import { rolesTable, usersTable } from "../schema";
 import { eq, and } from "drizzle-orm";
 
-// All available permissions in the system
 export const PERMISSIONS = {
   VIEW_ORDERS: "view_orders",
   EDIT_ORDERS: "edit_orders",
@@ -16,7 +15,7 @@ export const PERMISSIONS = {
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
-// Default permission sets — used as fallback when no DB role entry exists yet
+/** Default permission sets used as fallback when no DB role entry exists. */
 export const DEFAULT_ROLE_PERMISSIONS: Record<string, Permission[]> = {
   owner: Object.values(PERMISSIONS) as Permission[],
   admin: [
@@ -68,7 +67,7 @@ export async function getUserPermissions(userId: string, orgId: string): Promise
     return dbRole[0].permissions as string[];
   }
 
-  // Fallback to hardcoded defaults (during migration period)
+  // Fallback to defaults during migration period
   return DEFAULT_ROLE_PERMISSIONS[roleName] ?? [];
 }
 

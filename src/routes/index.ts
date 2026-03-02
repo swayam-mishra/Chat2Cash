@@ -24,7 +24,7 @@ router.get("/health", async (_req, res) => {
     }
   };
 
-  // 1. Check Database
+  // 1. Database
   try {
     await db.execute(sql`SELECT 1`);
     healthStatus.services.database = "connected";
@@ -34,14 +34,14 @@ router.get("/health", async (_req, res) => {
     logger.error({ err }, "Health Check: Database connection failed");
   }
 
-  // 2. Check Anthropic Latency (Lightweight check)
+  // 2. Anthropic API
   const startTime = Date.now();
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000); // 3s timeout
+    const timeout = setTimeout(() => controller.abort(), 3000);
 
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "HEAD", // Head request to check if endpoint is reachable
+        method: "HEAD",
         headers: { "x-api-key": env.ANTHROPIC_API_KEY },
         signal: controller.signal
     });
@@ -61,7 +61,7 @@ router.get("/health", async (_req, res) => {
 
   const statusCode = healthStatus.status === "ok" ? 200 : 503;
   
-  // 3. Check Queue Health
+  // 3. Queue
   try {
     const queueStats = await getQueueHealth();
     healthStatus.services.queue = "connected";
@@ -74,38 +74,36 @@ router.get("/health", async (_req, res) => {
   res.status(statusCode).json(healthStatus);
 });
 
-// Authenticate every request; inject req.user and req.orgId when available
+// Auth: inject req.user and req.orgId
 router.use(authHandler);
 
-// Read Operations: General Rate Limit + PII Redaction
+// Read operations
 router.get("/stats", generalLimiter, requireOrg, orderController.getStats);
 router.get("/orders", generalLimiter, requireOrg, redactPII, orderController.getOrders);
 router.get("/orders/:id", generalLimiter, requireOrg, redactPII, orderController.getOrderById);
 
-// Invoice Download: Auth + Org check → short-lived SAS token (Phase 2 security)
+// Invoice download
 router.get("/orders/:id/download", generalLimiter, requireOrg, invoiceController.downloadInvoice);
 
-// Write Operations: Strict Rate Limit + Input Sanitization
+// Write operations
 router.post("/extract", extractLimiter, requireOrg, sanitizeInputs, orderController.extractOrder);
 router.post("/extract-order", extractLimiter, requireOrg, sanitizeInputs, orderController.extractChatOrder);
 router.post("/generate-invoice", extractLimiter, requireOrg, sanitizeInputs, invoiceController.generateInvoice);
 
-// Async Extraction (BullMQ Background Jobs) — returns 202 with job ID
+// Async extraction (returns 202 with job ID)
 router.post("/async/extract", extractLimiter, requireOrg, sanitizeInputs, orderController.asyncExtractOrder);
 router.post("/async/extract-order", extractLimiter, requireOrg, sanitizeInputs, orderController.asyncExtractChatOrder);
 
-// Job Status & Queue Health
+// Job status & queue health
 router.get("/jobs/:id", generalLimiter, orderController.getJobStatusById);
 router.get("/queue/health", generalLimiter, orderController.getQueueStats);
 
-// Updates: Strict Rate Limit + Input Sanitization
+// Updates
 router.patch("/orders/:id/edit", extractLimiter, requireOrg, sanitizeInputs, orderController.editOrder);
 router.patch("/orders/:id", extractLimiter, requireOrg, sanitizeInputs, orderController.updateOrderStatus);
 router.delete("/orders/:id", extractLimiter, requireOrg, orderController.deleteOrder);
 
-// ==========================================
-// DLQ / Admin Routes (Phase 3)
-// ==========================================
+// DLQ / Admin routes
 router.get("/admin/dlq", generalLimiter, requireOrg, async (_req, res) => {
   const start = Number(_req.query.start) || 0;
   const end = Number(_req.query.end) || 20;

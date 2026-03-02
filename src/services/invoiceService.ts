@@ -29,12 +29,12 @@ export const generateInvoiceData = (
     day: "2-digit", month: "2-digit", year: "numeric" 
   });
   
-  // 1. Sequential Invoice Numbering (e.g., INV-2026-001)
+  // Sequential invoice numbering (e.g., INV-2026-001)
   const year = date.getFullYear();
   const seqStr = String(invoiceSequence).padStart(3, '0');
   const invoice_number = `INV-${year}-${seqStr}`;
 
-  // 2. Precision-safe math using Decimal.js (eliminates IEEE 754 float errors)
+  // Precision-safe math using Decimal.js (avoids IEEE 754 float errors)
   let subtotal = new Decimal(0);
 
   const invoiceItems: InvoiceItem[] = order.items.map((item) => {
@@ -47,12 +47,12 @@ export const generateInvoiceData = (
     return { 
       product_name: item.product_name, 
       quantity: item.quantity, 
-      price: price.toNumber(),       // keep display price in rupees
-      amount: amount.toNumber(),     // precise line total
+      price: price.toNumber(),
+      amount: amount.toNumber(),
     };
   });
 
-  // 3. Dynamic Tax Calculations using Decimal.js
+  // Tax calculation
   const taxRate = new Decimal(taxRatePercent);
   let cgst = new Decimal(0);
   let sgst = new Decimal(0);

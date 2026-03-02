@@ -5,7 +5,6 @@ import { PII_PATTERNS, SENSITIVE_KEYS } from "../config/piiPatterns";
 
 const phoneUtil = PhoneNumberUtil.getInstance();
 
-// Regions to check when parsing phone numbers
 const PHONE_REGIONS = ["IN", "US", "GB", "CA", "AU", "DE", "FR", "JP", "SG"];
 
 /**
@@ -22,10 +21,10 @@ export function redactPhoneNumbers(text: string): string {
         const parsed = phoneUtil.parse(match.trim(), region);
         if (phoneUtil.isValidNumber(parsed)) {
           text = text.replace(match, "[PHONE REDACTED]");
-          break; // matched in one region, no need to try others
+          break;
         }
       } catch {
-        // Not a valid phone number for this region, skip
+        // Not a valid phone number for this region
       }
     }
   }
@@ -39,12 +38,10 @@ export function redactPhoneNumbers(text: string): string {
 export function redactString(value: string): string {
   let result = value;
 
-  // Apply regex patterns from config
   for (const pattern of PII_PATTERNS) {
     result = result.replace(pattern.regex, pattern.replacement);
   }
 
-  // Apply international phone number redaction
   result = redactPhoneNumbers(result);
 
   return result;
@@ -91,7 +88,6 @@ export const redactPII = async (req: Request, res: Response, next: NextFunction)
       try {
         let shouldRedact = true;
 
-        // Permission-based check (replaces hardcoded FULL_ACCESS_ROLES)
         if (req.user?.id && req.orgId) {
           shouldRedact = !(await hasPermission(
             req.user.id,
@@ -106,7 +102,7 @@ export const redactPII = async (req: Request, res: Response, next: NextFunction)
 
         originalJson(data);
       } catch {
-        // On failure, redact by default (secure fallback)
+        // Secure fallback: redact on any permission-check failure
         originalJson(redactSensitiveData(data));
       }
     })();

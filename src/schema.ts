@@ -101,26 +101,23 @@ export type InsertUser = { username: string; password: string };
 export type Organization = typeof organizationsTable.$inferSelect;
 export type User = { id: string; username: string; password: string };
 
-// ==========================================
-// NORMALIZED & CONSOLIDATED DB TABLES
-// ==========================================
+// --- Database tables ---
 
-// Multi-tenancy: Each organization is a business using the platform
 export const organizationsTable = pgTable("organizations", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   gstNumber: text("gst_number"),
-  tier: text("tier").default("free").notNull(), // 'free' | 'pro' | 'enterprise'
+  tier: text("tier").default("free").notNull(),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 });
 
-// Business identity & tax config per organization (1:1 with organizations)
+/** Business identity & tax config (1:1 with organizations). */
 export const businessProfilesTable = pgTable("business_profiles", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id").references(() => organizationsTable.id).notNull().unique(),
   businessName: text("business_name").notNull(),
   gstNumber: text("gst_number"),
-  taxRate: real("tax_rate").default(18.0),     // configurable per business (e.g. 3% for jewelry, 18% for consulting)
+  taxRate: real("tax_rate").default(18.0),
   currency: text("currency").default("INR"),
   logoUrl: text("logo_url"),
   address: text("address"),
@@ -132,30 +129,22 @@ export const businessProfilesTable = pgTable("business_profiles", {
 
 export const customersTable = pgTable("customers", {
   id: text("id").primaryKey(),
-  // Multi-tenancy isolation: customers belong to a single organization
   organizationId: text("organization_id").references(() => organizationsTable.id).notNull(),
   name: text("name"),
-  // Removed global unique() — same phone can appear across different organizations
   phone: text("phone"),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 }, (table) => {
   return {
-    // Phone is unique only within an organization
     orgPhoneIdx: index("org_phone_idx").on(table.organizationId, table.phone),
   };
 });
 
 export const ordersTable = pgTable("orders", {
   id: text("id").primaryKey(),
-  
-  // Multi-tenancy isolation: orders belong to a single organization
   organizationId: text("organization_id").references(() => organizationsTable.id).notNull(),
-  
   customerId: text("customer_id").references(() => customersTable.id).notNull(),
-  
   extractionType: text("extraction_type").notNull(), 
-  
-  rawAiResponse: jsonb("raw_ai_response").notNull(), // Raw AI extraction — kept for audit/debug only
+  rawAiResponse: jsonb("raw_ai_response").notNull(),
   totalAmount: real("total_amount"),
   currency: text("currency").default("INR"),
   
@@ -178,19 +167,17 @@ export const ordersTable = pgTable("orders", {
     statusIdx: index("status_idx").on(table.status),
     extractionTypeIdx: index("extraction_type_idx").on(table.extractionType),
     customerIdIdx: index("customer_id_idx").on(table.customerId),
-    // Index for frequent organization-level queries
     orgIdx: index("org_idx").on(table.organizationId),
     rawAiResponseGinIdx: index("raw_ai_response_gin_idx").using("gin", table.rawAiResponse),
     rawMessagesGinIdx: index("raw_messages_gin_idx").using("gin", table.rawMessages),
   };
 });
 
-// PRODUCTS TABLE — per-org product catalog
 export const productsTable = pgTable("products", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id").references(() => organizationsTable.id).notNull(),
   name: text("name").notNull(),
-  unit: text("unit"),            // e.g. "kg", "pcs", "dozen"
+  unit: text("unit"),
   defaultPrice: real("default_price"),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 }, (table) => {
@@ -199,14 +186,12 @@ export const productsTable = pgTable("products", {
   };
 });
 
-// ORDER ITEMS TABLE — normalized line items (one row per item per order)
 export const orderItemsTable = pgTable("order_items", {
   id: text("id").primaryKey(),
   orderId: text("order_id").references(() => ordersTable.id).notNull(),
   organizationId: text("organization_id").references(() => organizationsTable.id).notNull(),
-  // Optional soft-link to a known product in the catalog
   productId: text("product_id").references(() => productsTable.id),
-  productName: text("product_name").notNull(), // denormalized for speed
+  productName: text("product_name").notNull(),
   quantity: real("quantity").notNull(),
   unit: text("unit"),
   pricePerUnit: real("price_per_unit"),
@@ -218,42 +203,31 @@ export const orderItemsTable = pgTable("order_items", {
   };
 });
 
-// ==========================================
-// AUTH & ACCESS TABLES
-// ==========================================
+// --- Auth & access tables ---
 
-// ROLES & PERMISSIONS TABLE (RBAC — replaces hardcoded role arrays)
 export const rolesTable = pgTable("roles", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id").references(() => organizationsTable.id).notNull(),
-  name: text("name").notNull(), // 'owner' | 'admin' | 'manager' | 'auditor' | 'member'
+  name: text("name").notNull(),
   permissions: jsonb("permissions").$type<string[]>().notNull().default([]),
-  // e.g. ['view_orders','edit_orders','view_pii','manage_users','manage_billing']
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 });
 
-// USERS TABLE (Mirrors Neon Auth)
 export const usersTable = pgTable("users", {
-  id: text("id").primaryKey(), // Matches neon_auth.user.id
+  id: text("id").primaryKey(),
   email: text("email").notNull(),
   name: text("name"),
-
-  // Link User -> Organization
   organizationId: text("organization_id").references(() => organizationsTable.id),
-
-  role: text("role").default("member"), // 'owner' | 'member'
+  role: text("role").default("member"),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 });
 
-// API KEYS TABLE (For WhatsApp Bots/Machines)
 export const apiKeysTable = pgTable("api_keys", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id").references(() => organizationsTable.id).notNull(),
-
-  keyHash: text("key_hash").notNull(),     // Store SHA-256 hash, NOT the raw key
-  name: text("name").notNull(),            // e.g. "Production Bot"
-  maskedKey: text("masked_key").notNull(), // e.g. "sk_...9a2f"
-
+  keyHash: text("key_hash").notNull(),
+  name: text("name").notNull(),
+  maskedKey: text("masked_key").notNull(),
   isActive: boolean("is_active").default(true).notNull(),
   lastUsedAt: timestamp("last_used_at", { mode: 'string' }),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),

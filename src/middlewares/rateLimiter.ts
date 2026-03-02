@@ -5,7 +5,6 @@ import { organizationsTable } from "../schema";
 import { eq } from "drizzle-orm";
 import { env } from "../config/env";
 
-// Tier-based limits (from env, overridable without redeploy)
 const TIER_LIMITS: Record<string, number> = {
   free: parseInt(env.RATE_LIMIT_FREE),
   pro: parseInt(env.RATE_LIMIT_PRO),
@@ -31,13 +30,12 @@ async function getOrgRateLimit(orgId: string | undefined): Promise<number> {
       return TIER_LIMITS[org[0].tier] ?? TIER_LIMITS.free;
     }
   } catch {
-    // If DB lookup fails, fall back to free tier
+    // Fall back to free tier on DB lookup failure
   }
 
   return TIER_LIMITS.free;
 }
 
-// Cache limiters per max value to avoid recreating on every request
 const limiterCache = new Map<number, ReturnType<typeof rateLimit>>();
 
 function getLimiter(max: number) {
@@ -59,8 +57,7 @@ function getLimiter(max: number) {
 }
 
 /**
- * Dynamic rate limiter that adjusts based on organization tier.
- * Replaces the old hardcoded `max: 20` extractLimiter.
+ * Dynamic rate limiter that adjusts limits based on organization tier.
  */
 export const extractLimiter = async (req: Request, res: Response, next: NextFunction) => {
   const limit = await getOrgRateLimit(req.orgId);
@@ -68,8 +65,7 @@ export const extractLimiter = async (req: Request, res: Response, next: NextFunc
 };
 
 /**
- * General limiter for lighter read operations.
- * Also tier-aware but with a 5x multiplier.
+ * General limiter for read operations — tier-aware with a 5x multiplier.
  */
 export const generalLimiter = async (req: Request, res: Response, next: NextFunction) => {
   const baseLimit = await getOrgRateLimit(req.orgId);

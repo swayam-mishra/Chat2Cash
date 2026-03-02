@@ -28,9 +28,7 @@ import {
   type SeededOrg,
 } from "../fixtures/mockDbState";
 
-// ── Mock Anthropic SDK ─────────────────────────────────────────
-// vi.mock is auto-hoisted by Vitest to the top of the file,
-// so it intercepts the SDK before any app code imports it.
+// Mock Anthropic SDK — vi.mock is hoisted before any app imports
 
 const MOCK_AI_RESPONSE = {
   customer_name: "Rahul Sharma",
@@ -66,14 +64,11 @@ vi.mock("@anthropic-ai/sdk", () => {
   };
 });
 
-// ── Lazy imports (after mock registration) ─────────────────────
-// These modules transitively import the Anthropic SDK, so they
-// MUST be resolved after vi.mock has been registered.
+// Lazy imports — must resolve after vi.mock registration
 type QueueServiceModule = typeof import("../../src/services/queueService");
 let queueMod: QueueServiceModule;
 let worker: WorkerType;
 
-// ── Test-scoped resources ──────────────────────────────────────
 let testDb: TestDb;
 let pool: pg.Pool;
 let seeded: SeededOrg;
@@ -97,10 +92,6 @@ afterAll(async () => {
   if (pool) await pool.end();
 });
 
-// ================================================================
-// Test suite
-// ================================================================
-
 describe("Extraction Worker E2E", () => {
   beforeEach(async () => {
     await clearAllTables(testDb);
@@ -115,7 +106,6 @@ describe("Extraction Worker E2E", () => {
       { sender: "Shop Owner", text: "Done, kal tak pahunch jayega" },
     ];
 
-    // ── 1. Enqueue the job ───────────────────────────────────────
     const job = await queueMod.extractionQueue.add("extract", {
       type: "chat_log" as const,
       orgId: seeded.org.id,
@@ -124,14 +114,12 @@ describe("Extraction Worker E2E", () => {
 
     expect(job.id).toBeDefined();
 
-    // ── 2. Wait for the worker to finish processing ──────────────
     const result = await waitForJobCompletion(worker, job.id!);
 
     expect(result).toBeDefined();
     expect(result.status).toBe("completed");
     expect(result.orderId).toBeDefined();
 
-    // ── 3. Verify the order row in PostgreSQL ────────────────────
     const [dbOrder] = await testDb
       .select()
       .from(ordersTable)
@@ -153,7 +141,6 @@ describe("Extraction Worker E2E", () => {
     // Raw messages should be preserved for audit
     expect(dbOrder.rawMessages).toEqual(mockMessages);
 
-    // ── 4. Verify normalized order items ─────────────────────────
     const items = await testDb
       .select()
       .from(orderItemsTable)
@@ -174,7 +161,6 @@ describe("Extraction Worker E2E", () => {
     expect(dal!.pricePerUnit).toBe(95);
     expect(dal!.totalPrice).toBe(190); // 2 × 95
 
-    // ── 5. Verify customer was created with tenant isolation ─────
     const [customer] = await testDb
       .select()
       .from(customersTable)
@@ -184,7 +170,6 @@ describe("Extraction Worker E2E", () => {
     expect(customer.name).toBe("Rahul Sharma");
     expect(customer.organizationId).toBe(seeded.org.id);
 
-    // ── 6. Verify BullMQ job completed ───────────────────────────
     const finishedJob = await Job.fromId(queueMod.extractionQueue, job.id!);
     expect(await finishedJob!.getState()).toBe("completed");
     expect(finishedJob!.returnvalue.orderId).toBe(result.orderId);
@@ -228,8 +213,6 @@ describe("Extraction Worker E2E", () => {
     expect(failReason).toContain("missing message or messages");
   });
 });
-
-// ── Helpers ────────────────────────────────────────────────────
 
 interface WorkerResult {
   orderId: string;

@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { AppError } from "./errorHandler";
 
-// Extend Express Request to carry the resolved Organization ID throughout the lifecycle
 declare global {
   namespace Express {
     interface Request {
@@ -11,17 +10,10 @@ declare global {
 }
 
 /**
- * Tenant Context Middleware
- *
- * Intercepts every protected request and extracts the Organization ID.
- * In production this value would come from a verified JWT claim (req.user.orgId).
- * During development it falls back to the `x-organization-id` header.
- *
- * Fails closed: any request without a resolvable orgId is rejected with 401.
+ * Extracts the Organization ID from the request headers and sets `req.orgId`.
+ * Rejects any request that lacks a resolvable org context.
  */
 export const tenantHandler = (req: Request, _res: Response, next: NextFunction) => {
-  // TODO (production): replace header lookup with JWT-claim extraction:
-  //   const orgId = (req as any).user?.orgId;
   const orgId = req.headers["x-organization-id"] as string | undefined;
 
   if (!orgId || orgId.trim() === "") {

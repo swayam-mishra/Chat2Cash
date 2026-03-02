@@ -7,7 +7,6 @@ import { env } from "../config/env";
 import crypto from "crypto";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
-// Extend Express Request
 declare global {
   namespace Express {
     interface Request {
@@ -17,7 +16,6 @@ declare global {
   }
 }
 
-// Initialize Neon JWKS Set for token verification
 const JWKS = createRemoteJWKSet(new URL(env.NEON_JWKS_URL));
 
 export const authHandler = async (req: Request, res: Response, next: NextFunction) => {
@@ -25,9 +23,7 @@ export const authHandler = async (req: Request, res: Response, next: NextFunctio
   const apiKeyHeader = req.headers["x-api-key"] as string;
 
   try {
-    // ===============================================
-    // PATH 1: MACHINE ACCESS (API KEY) - NO CHANGES
-    // ===============================================
+    // API Key authentication (machine access)
     if (apiKeyHeader) {
       const hash = crypto.createHash("sha256").update(apiKeyHeader).digest("hex");
 
@@ -43,21 +39,17 @@ export const authHandler = async (req: Request, res: Response, next: NextFunctio
       return next();
     }
 
-    // ===============================================
-    // PATH 2: HUMAN ACCESS (NEON AUTH JWT)
-    // ===============================================
+    // JWT authentication (human access via Neon Auth)
     if (authHeader?.startsWith("Bearer ")) {
       const token = authHeader.split(" ")[1];
 
       try {
-        // A. Verify Token locally with Neon JWKS
         const { payload } = await jwtVerify(token, JWKS);
 
-        // Neon Auth JWT payload contains 'sub' (User ID) and 'email'
         const userId = payload.sub as string;
         const userEmail = payload.email as string;
 
-        // B. JIT Sync: Check if user exists in your app's public.users table
+        // JIT sync: create user in local DB on first login
         const existingUser = await db
           .select()
           .from(usersTable)
@@ -67,20 +59,19 @@ export const authHandler = async (req: Request, res: Response, next: NextFunctio
         if (existingUser.length > 0) {
           req.user = existingUser[0];
         } else {
-          // C. User doesn't exist in public.users yet — create them
           const [newUser] = await db
             .insert(usersTable)
             .values({
-              id: userId, // Matches neon_auth.user.id
+              id: userId,
               email: userEmail,
               name: (payload.name as string) ?? "Unknown",
-              // organizationId is null until they create or join an org
+              // organizationId is assigned when the user creates/joins an org
             })
             .returning();
           req.user = newUser;
         }
 
-        // D. Set org context
+        // Set org context from the user record
         if (req.user?.organizationId) {
           req.orgId = req.user.organizationId;
         }

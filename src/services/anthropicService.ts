@@ -9,9 +9,9 @@ const DEFAULT_MODEL_STR = env.AI_MODEL_SMART;
 const CHAT_EXTRACT_MODEL = env.AI_MODEL_SMART;
 
 const REQUEST_TIMEOUT_MS = parseInt(env.AI_REQUEST_TIMEOUT_MS);
-const MAX_RETRIES = 3;            // Increased retries for resilience
-const INITIAL_RETRY_DELAY = 2000; // Start with 2s delay
-const MAX_RETRY_DELAY = 10000;    // Cap delay at 10s
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY = 2000;
+const MAX_RETRY_DELAY = 10000;
 
 const anthropic = new Anthropic({
   apiKey: env.ANTHROPIC_API_KEY,
@@ -31,14 +31,13 @@ function applySlidingWindow(messages: ChatMessage[], maxChars: number = 12000): 
   return pruned;
 }
 
-// OPTIMIZATION: Helper for exponential backoff with jitter
-// Prevents "thundering herd" problem when multiple requests fail simultaneously
+/** Exponential backoff with jitter to avoid thundering herd on simultaneous failures. */
 const calculateBackoff = (attempt: number): number => {
   const baseDelay = Math.min(
     MAX_RETRY_DELAY,
     INITIAL_RETRY_DELAY * Math.pow(2, attempt)
   );
-  const jitter = Math.random() * 1000; // Add 0-1000ms jitter
+  const jitter = Math.random() * 1000;
   return baseDelay + jitter;
 };
 
@@ -68,8 +67,6 @@ async function extractWithTool(
           {
             type: "text" as const,
             text: systemPrompt,
-            // OPTIMIZATION: Prompt Caching
-            // Keeps the static system prompt hot in cache for 5 minutes
             cache_control: { type: "ephemeral" } 
           } as any,
         ],
@@ -97,17 +94,7 @@ async function extractWithTool(
       lastError = error;
       const elapsed = Date.now() - callStart;
       
-      // OPTIMIZATION: Intelligent Error Handling
-      const isRateLimit = error.status === 429;
-      const isServerError = error.status >= 500;
-      const isClientError = error.status >= 400 && error.status < 500 && !isRateLimit;
-
-      logError(
-        `Claude API call failed after ${elapsed}ms (attempt ${attempt + 1}): ${error.message}`,
-        error instanceof Error ? error : undefined,
-      );
-
-      // Fail fast on client errors (e.g. Invalid API Key, Bad Request)
+      // Fail fast on client errors (e.g. invalid API key)
       if (isClientError) {
         throw error;
       }
@@ -115,7 +102,7 @@ async function extractWithTool(
       if (attempt < MAX_RETRIES) {
         let delay: number;
 
-        // OPTIMIZATION: Respect Retry-After header from 429 responses
+        // Respect Retry-After header from 429 responses
         if (isRateLimit && error.headers?.["retry-after"]) {
           const retryAfterSec = Number(error.headers["retry-after"]);
           delay = (isNaN(retryAfterSec) ? calculateBackoff(attempt) : retryAfterSec * 1000);
@@ -249,7 +236,6 @@ export async function extractOrderFromChat(messages: ChatMessage[]): Promise<Ext
     created_at: new Date().toISOString(),
     raw_messages: messages, 
   };
-
   return order;
 }
 
@@ -274,7 +260,7 @@ export async function* streamExtractOrderFromChat(messages: ChatMessage[]) {
 
   for await (const chunk of stream) {
     if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
-      yield chunk.delta.text; 
+      yield chunk.delta.text;
     }
   }
 }

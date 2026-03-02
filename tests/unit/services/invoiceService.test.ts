@@ -2,11 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { generateInvoiceData, type InvoiceOptions } from "../../../src/services/invoiceService";
 import type { ExtractedChatOrder } from "../../../src/schema";
 
-// ════════════════════════════════════════════════════════════════
-// invoiceService — Unit Tests (No DB / Redis required)
-// ════════════════════════════════════════════════════════════════
-
-// ── Test helpers ───────────────────────────────────────────────
 
 /** Returns a minimal valid order for use in tests. */
 function makeOrder(overrides: Partial<ExtractedChatOrder> = {}): ExtractedChatOrder {
@@ -33,16 +28,12 @@ const DEFAULT_OPTIONS: InvoiceOptions = {
   isInterstate: false,
 };
 
-// ── Freeze the clock so date-dependent fields are deterministic ──
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-03-15T10:00:00Z"));
 });
 
 describe("generateInvoiceData", () => {
-  // ──────────────────────────────────────────────────────────────
-  // Basic Invoice Generation
-  // ──────────────────────────────────────────────────────────────
   describe("basic generation", () => {
     it("should produce a valid invoice with correct structure", () => {
       const invoice = generateInvoiceData(makeOrder(), DEFAULT_OPTIONS);
@@ -83,9 +74,6 @@ describe("generateInvoiceData", () => {
     });
   });
 
-  // ──────────────────────────────────────────────────────────────
-  // Invoice Numbering
-  // ──────────────────────────────────────────────────────────────
   describe("invoice numbering", () => {
     it("should generate sequential invoice number with year", () => {
       const invoice = generateInvoiceData(makeOrder(), {
@@ -113,9 +101,6 @@ describe("generateInvoiceData", () => {
     });
   });
 
-  // ──────────────────────────────────────────────────────────────
-  // Line Items & Subtotal
-  // ──────────────────────────────────────────────────────────────
   describe("line items and subtotal", () => {
     it("should map order items to invoice items with correct amounts", () => {
       const invoice = generateInvoiceData(makeOrder(), DEFAULT_OPTIONS);
@@ -153,9 +138,6 @@ describe("generateInvoiceData", () => {
     });
   });
 
-  // ──────────────────────────────────────────────────────────────
-  // Tax Calculations
-  // ──────────────────────────────────────────────────────────────
   describe("tax calculations", () => {
     it("should split tax evenly into CGST + SGST for intra-state", () => {
       const invoice = generateInvoiceData(makeOrder(), {
@@ -225,9 +207,6 @@ describe("generateInvoiceData", () => {
     });
   });
 
-  // ──────────────────────────────────────────────────────────────
-  // Edge Cases: Precision & Rounding
-  // ──────────────────────────────────────────────────────────────
   describe("precision and rounding (paise-based math)", () => {
     it("should avoid floating-point errors on fractional prices", () => {
       const order = makeOrder({
@@ -262,9 +241,6 @@ describe("generateInvoiceData", () => {
     });
   });
 
-  // ──────────────────────────────────────────────────────────────
-  // Edge Cases: Zero-Value & Missing Fields
-  // ──────────────────────────────────────────────────────────────
   describe("zero-value and missing fields", () => {
     it("should treat null price as 0", () => {
       const order = makeOrder({
@@ -316,9 +292,6 @@ describe("generateInvoiceData", () => {
     });
   });
 
-  // ──────────────────────────────────────────────────────────────
-  // Default / Fallback Options
-  // ──────────────────────────────────────────────────────────────
   describe("default option fallbacks", () => {
     it("should use default business name when not provided", () => {
       const invoice = generateInvoiceData(makeOrder(), {
@@ -345,9 +318,6 @@ describe("generateInvoiceData", () => {
     });
   });
 
-  // ──────────────────────────────────────────────────────────────
-  // Date Formatting
-  // ──────────────────────────────────────────────────────────────
   describe("date formatting", () => {
     it("should format date in DD/MM/YYYY en-IN locale", () => {
       // Clock is 2026-03-15

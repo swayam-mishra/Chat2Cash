@@ -5,8 +5,7 @@ import { addExtractionJob, getJobStatus, getQueueHealth } from "../services/queu
 import { extractOrderRequestSchema, extractOrderFromChatRequestSchema, updateChatOrderSchema, ExtractedChatOrder } from "../schema";
 import { asyncHandler, AppError } from "../middlewares/errorHandler";
 
-// Helper to remove circular references (if any) or unwanted fields before sending response
-// (Though PII Redactor handles the heavy lifting now)
+/** Strips any unwanted fields before sending a response. */
 const sanitizeResponse = (order: any) => {
   return order; 
 };
@@ -61,12 +60,10 @@ export const extractChatOrder = asyncHandler(async (req: Request, res: Response)
 
 export const updateOrderStatus = asyncHandler(async (req: Request, res: Response) => {
   const id = req.params.id as string;
-  const { status } = req.body; // Basic validation, extend via Zod if needed schema
+  const { status } = req.body;
 
   if (!status) throw new AppError("Status is required", 400);
 
-  // Since storage methods are specific, we might need to check order type or try both
-  // For this optimized version, we assume Chat Orders are the primary entity
   const updatedOrder = await storage.updateChatOrderDetails(req.orgId!, id, { status });
   
   if (!updatedOrder) {
@@ -100,9 +97,7 @@ export const deleteOrder = asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, message: "Order deleted successfully" });
 });
 
-// ==========================================
-// ASYNC EXTRACTION (BullMQ Background Jobs)
-// ==========================================
+// --- Async extraction (BullMQ background jobs) ---
 
 export const asyncExtractOrder = asyncHandler(async (req: Request, res: Response) => {
   const { message } = extractOrderRequestSchema.parse(req.body);

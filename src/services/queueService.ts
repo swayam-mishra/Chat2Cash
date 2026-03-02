@@ -7,11 +7,9 @@ import * as anthropicService from "./anthropicService";
 import { storage } from "./storageService";
 import type { ChatMessage } from "../schema";
 
-// ==========================================
-// REDIS CONNECTION
-// ==========================================
+// --- Redis connection ---
 const connection = new IORedis(env.REDIS_URL, {
-  maxRetriesPerRequest: null, // Required by BullMQ
+  maxRetriesPerRequest: null,
 });
 
 connection.on("error", (err) => {
@@ -22,40 +20,35 @@ connection.on("connect", () => {
   logger.info("Redis connected for job queue");
 });
 
-// ==========================================
-// QUEUE DEFINITIONS
-// ==========================================
+// --- Queue definitions ---
 export const extractionQueue = new Queue("order-extraction", {
   connection,
   defaultJobOptions: {
     attempts: 3,
     backoff: { type: "exponential", delay: 3000 },
-    removeOnComplete: { age: 3600 * 24 }, // Keep completed jobs for 24h
-    removeOnFail: false,                   // DLQ: Keep ALL failed jobs for manual review
+    removeOnComplete: { age: 3600 * 24 },
+    removeOnFail: false,
   },
 });
 
-// Phase 3: Separate webhook queue — decoupled from extraction processing
 export const webhookQueue = new Queue("webhook-delivery", {
   connection,
   defaultJobOptions: {
-    attempts: 10,                                // Retry up to 10 times
-    backoff: { type: "exponential", delay: 5000 }, // 5s, 10s, 20s, ... up to ~24h total
+    attempts: 10,
+    backoff: { type: "exponential", delay: 5000 },
     removeOnComplete: { age: 3600 * 24 },
-    removeOnFail: { age: 3600 * 72 },             // Keep failed webhooks for 72h
+    removeOnFail: { age: 3600 * 72 },
   },
 });
 
-// ==========================================
-// JOB TYPES
-// ==========================================
+// --- Job types ---
 export interface ExtractionJobData {
   type: "single_message" | "chat_log";
-  orgId: string;              // Organization context for multi-tenancy
-  correlationId?: string;     // Phase 5: trace request → queue → worker → DB
-  message?: string;           // For single message extraction
-  messages?: ChatMessage[];   // For chat extraction
-  webhookUrl?: string;        // Optional callback URL
+  orgId: string;
+  correlationId?: string;
+  message?: string;
+  messages?: ChatMessage[];
+  webhookUrl?: string;
 }
 
 export interface ExtractionJobResult {
@@ -70,9 +63,7 @@ export interface WebhookJobData {
   correlationId?: string;
 }
 
-// ==========================================
-// EXTRACTION WORKER (processes AI jobs from the queue)
-// ==========================================
+// --- Extraction worker ---
 let worker: Worker | null = null;
 
 export function startExtractionWorker(): Worker {
@@ -105,7 +96,7 @@ export function startExtractionWorker(): Worker {
 
       await job.updateProgress(90);
 
-      // Phase 3: Enqueue webhook delivery to a SEPARATE queue (decoupled)
+      // Enqueue webhook delivery to a separate queue
       if (job.data.webhookUrl) {
         await webhookQueue.add("deliver", {
           webhookUrl: job.data.webhookUrl,
@@ -141,7 +132,7 @@ export function startExtractionWorker(): Worker {
   worker.on("failed", (job, err) => {
     logger.error({ jobId: job?.id, err }, "Extraction job failed");
 
-    // Enqueue failure webhook (decoupled) so the worker doesn't block
+    // Enqueue failure webhook so the worker doesn't block
     if (job?.data.webhookUrl) {
       webhookQueue.add("deliver", {
         webhookUrl: job.data.webhookUrl,
@@ -165,9 +156,7 @@ export function startExtractionWorker(): Worker {
   return worker;
 }
 
-// ==========================================
-// WEBHOOK WORKER (Phase 3: separated from extraction)
-// ==========================================
+// --- Webhook worker ---
 let webhookWorker: Worker | null = null;
 
 export function startWebhookWorker(): Worker {
@@ -186,7 +175,7 @@ export function startWebhookWorker(): Worker {
           "X-Correlation-Id": correlationId ?? "",
         },
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(10_000), // 10s timeout per attempt
+        signal: AbortSignal.timeout(10_000),
       });
 
       if (!response.ok) {
@@ -216,16 +205,12 @@ export function startWebhookWorker(): Worker {
   return webhookWorker;
 }
 
-// ==========================================
-// QUEUE HELPERS
-// ==========================================
+// --- Queue helpers ---
 
 export async function addExtractionJob(data: ExtractionJobData): Promise<string> {
-  // Phase 5: Attach correlation ID from the current request context
   const correlationId = data.correlationId ?? getCorrelationId();
 
   const job = await extractionQueue.add("extract", { ...data, correlationId }, {
-    // Higher priority for single messages (faster to process)
     priority: data.type === "single_message" ? 1 : 2,
   });
 
@@ -243,8 +228,8 @@ export async function getJobStatus(jobId: string) {
 
   return {
     jobId: job.id,
-    state,       // "waiting" | "active" | "completed" | "failed" | "delayed"
-    progress,    // 0-100
+    state,
+    progress,
     result: state === "completed" ? job.returnvalue : undefined,
     error: state === "failed" ? job.failedReason : undefined,
     createdAt: new Date(job.timestamp).toISOString(),
@@ -262,7 +247,6 @@ export async function getQueueHealth() {
     extractionQueue.getFailedCount(),
     extractionQueue.getDelayedCount(),
   ]);
-
   // Include webhook queue stats
   const [whWaiting, whActive, whFailed] = await Promise.all([
     webhookQueue.getWaitingCount(),
@@ -276,11 +260,9 @@ export async function getQueueHealth() {
   };
 }
 
-// ==========================================
-// DLQ MANAGEMENT (Phase 3)
-// ==========================================
+// --- DLQ management ---
 
-/** List failed extraction jobs (Dead Letter Queue) */
+/** Lists failed extraction jobs (Dead Letter Queue). */
 export async function getFailedJobs(start = 0, end = 20) {
   const jobs = await extractionQueue.getFailed(start, end);
   return jobs.map((job) => ({
@@ -294,7 +276,7 @@ export async function getFailedJobs(start = 0, end = 20) {
   }));
 }
 
-/** Retry a specific failed job from the DLQ */
+/** Retries a specific failed job from the DLQ. */
 export async function retryFailedJob(jobId: string): Promise<boolean> {
   const job = await Job.fromId(extractionQueue, jobId);
   if (!job) return false;
@@ -307,7 +289,7 @@ export async function retryFailedJob(jobId: string): Promise<boolean> {
   return true;
 }
 
-/** Retry ALL failed jobs in the DLQ */
+/** Retries ALL failed jobs in the DLQ. */
 export async function retryAllFailedJobs(): Promise<number> {
   const failed = await extractionQueue.getFailed(0, 1000);
   let retried = 0;

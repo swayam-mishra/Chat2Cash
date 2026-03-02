@@ -1,4 +1,4 @@
-import { ExtractedOrder, ExtractedChatOrder, Invoice, Organization } from "../schema";
+﻿import { ExtractedOrder, ExtractedChatOrder, Invoice, Organization } from "../schema";
 import { db } from "../config/db";
 import { ordersTable, customersTable, organizationsTable, productsTable, orderItemsTable, businessProfilesTable } from "../schema";
 import { eq, desc, max, count, sum, and, isNull, inArray } from "drizzle-orm";
@@ -40,10 +40,7 @@ export interface IStorage {
   }>;
 }
 
-// ---------------------------------------------------------------------------
-// Row mappers
-// ---------------------------------------------------------------------------
-
+/** Maps a DB order row + customer row + item rows to the ExtractedOrder API shape. */
 function mapToExtractedOrder(orderRow: any, customerRow: any, itemRows: any[] = []): ExtractedOrder {
   return {
     id: orderRow.id,
@@ -57,7 +54,7 @@ function mapToExtractedOrder(orderRow: any, customerRow: any, itemRows: any[] = 
           pricePerUnit: i.pricePerUnit ?? undefined,
           totalPrice: i.totalPrice ?? undefined,
         }))
-      : orderRow.rawAiResponse ?? [], // fallback to JSONB audit column
+      : orderRow.rawAiResponse ?? [],
     totalAmount: orderRow.totalAmount || undefined,
     currency: orderRow.currency || "INR",
     notes: orderRow.specialInstructions || undefined,
@@ -70,6 +67,7 @@ function mapToExtractedOrder(orderRow: any, customerRow: any, itemRows: any[] = 
   };
 }
 
+/** Maps a DB order row + customer row + item rows to the ExtractedChatOrder API shape. */
 function mapToExtractedChatOrder(orderRow: any, customerRow: any, itemRows: any[] = []): ExtractedChatOrder {
   return {
     id: orderRow.id,
@@ -80,7 +78,7 @@ function mapToExtractedChatOrder(orderRow: any, customerRow: any, itemRows: any[
           quantity: i.quantity,
           price: i.pricePerUnit ?? null,
         }))
-      : orderRow.rawAiResponse ?? [], // fallback to JSONB audit column
+      : orderRow.rawAiResponse ?? [],
     delivery_address: orderRow.deliveryAddress || undefined,
     delivery_date: orderRow.deliveryDate || undefined,
     special_instructions: orderRow.specialInstructions || undefined,
@@ -93,15 +91,7 @@ function mapToExtractedChatOrder(orderRow: any, customerRow: any, itemRows: any[
   };
 }
 
-// ---------------------------------------------------------------------------
-// Storage implementation
-// ---------------------------------------------------------------------------
-
 export class DatabaseStorage implements IStorage {
-
-  // ==========================================
-  // ORGANIZATION
-  // ==========================================
 
   async getOrganization(orgId: string): Promise<Organization | undefined> {
     const result = await db.select()
@@ -129,7 +119,7 @@ export class DatabaseStorage implements IStorage {
       };
     }
 
-    // Fallback to env defaults (backward compatibility during migration)
+    // Fallback to env defaults when no business profile exists
     return {
       businessName: env.DEFAULT_BUSINESS_NAME,
       gstNumber: env.DEFAULT_GST_NUMBER,
@@ -142,16 +132,14 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  // ==========================================
-  // SINGLE MESSAGE ORDERS
-  // ==========================================
+  // --- Single message orders ---
 
   async getOrders(orgId: string): Promise<ExtractedOrder[]> {
     const results = await db.select({ order: ordersTable, customer: customersTable })
       .from(ordersTable)
       .innerJoin(customersTable, eq(ordersTable.customerId, customersTable.id))
       .where(and(
-        eq(ordersTable.organizationId, orgId),           // 🔒 Data isolation
+        eq(ordersTable.organizationId, orgId),
         eq(ordersTable.extractionType, 'single_message'),
         isNull(ordersTable.deletedAt)
       ))
@@ -179,7 +167,7 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(customersTable, eq(ordersTable.customerId, customersTable.id))
       .where(and(
         eq(ordersTable.id, id),
-        eq(ordersTable.organizationId, orgId),           // 🔒 Data isolation
+        eq(ordersTable.organizationId, orgId),
         isNull(ordersTable.deletedAt)
       ));
 
@@ -193,17 +181,17 @@ export class DatabaseStorage implements IStorage {
       const customerId = randomUUID();
       const [customer] = await tx.insert(customersTable).values({
         id: customerId,
-        organizationId: orgId,                           // 🔒 Scoped
+        organizationId: orgId,
         name: order.customerName || "Unknown Customer",
         phone: order.customerPhone || undefined,
       }).returning();
 
       const [newOrder] = await tx.insert(ordersTable).values({
         id: order.id,
-        organizationId: orgId,                           // 🔒 Scoped
+        organizationId: orgId,
         customerId: customer.id,
         extractionType: 'single_message',
-        rawAiResponse: order.items,                      // audit/debug copy
+        rawAiResponse: order.items,
         totalAmount: order.totalAmount,
         currency: order.currency,
         specialInstructions: order.notes,
@@ -239,7 +227,7 @@ export class DatabaseStorage implements IStorage {
         .set({ status })
         .where(and(
           eq(ordersTable.id, id),
-          eq(ordersTable.organizationId, orgId),         // 🔒 Data isolation
+          eq(ordersTable.organizationId, orgId),
           isNull(ordersTable.deletedAt)
         ))
         .returning();
@@ -257,23 +245,21 @@ export class DatabaseStorage implements IStorage {
       .set({ deletedAt: new Date().toISOString() })
       .where(and(
         eq(ordersTable.id, id),
-        eq(ordersTable.organizationId, orgId)            // 🔒 Data isolation
+        eq(ordersTable.organizationId, orgId)
       ))
       .returning();
       
     return !!deleted;
   }
 
-  // ==========================================
-  // CHAT ORDERS
-  // ==========================================
+  // --- Chat orders ---
 
   async getChatOrders(orgId: string, limit: number = 50, offset: number = 0): Promise<ExtractedChatOrder[]> {
     const results = await db.select({ order: ordersTable, customer: customersTable })
       .from(ordersTable)
       .innerJoin(customersTable, eq(ordersTable.customerId, customersTable.id))
       .where(and(
-        eq(ordersTable.organizationId, orgId),           // 🔒 Data isolation
+        eq(ordersTable.organizationId, orgId),
         eq(ordersTable.extractionType, 'chat_log'),
         isNull(ordersTable.deletedAt)
       ))
@@ -299,7 +285,7 @@ export class DatabaseStorage implements IStorage {
 
   async getChatOrdersCount(orgId: string, statusFilter?: string): Promise<number> {
     const conditions: any[] = [
-      eq(ordersTable.organizationId, orgId),             // 🔒 Data isolation
+      eq(ordersTable.organizationId, orgId),
       eq(ordersTable.extractionType, 'chat_log'),
       isNull(ordersTable.deletedAt),
     ];
@@ -319,7 +305,7 @@ export class DatabaseStorage implements IStorage {
     const result = await db.select({ value: sum(ordersTable.totalAmount) })
       .from(ordersTable)
       .where(and(
-        eq(ordersTable.organizationId, orgId),           // 🔒 Data isolation
+        eq(ordersTable.organizationId, orgId),
         eq(ordersTable.extractionType, 'chat_log'),
         isNull(ordersTable.deletedAt)
       ));
@@ -333,7 +319,7 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(customersTable, eq(ordersTable.customerId, customersTable.id))
       .where(and(
         eq(ordersTable.id, id),
-        eq(ordersTable.organizationId, orgId),           // 🔒 Data isolation
+        eq(ordersTable.organizationId, orgId),
         isNull(ordersTable.deletedAt)
       ));
 
@@ -344,7 +330,6 @@ export class DatabaseStorage implements IStorage {
 
   async addChatOrder(orgId: string, order: ExtractedChatOrder): Promise<ExtractedChatOrder> {
     return await db.transaction(async (tx) => {
-      // Find or create customer scoped to this organization (match by name+phone when available)
       let customerId: string;
       const lookupConditions: any[] = [eq(customersTable.organizationId, orgId)];
       if (order.customer_name) {
@@ -362,17 +347,17 @@ export class DatabaseStorage implements IStorage {
         customerId = randomUUID();
         await tx.insert(customersTable).values({
           id: customerId,
-          organizationId: orgId,                         // 🔒 Scoped
+          organizationId: orgId,
           name: order.customer_name || "Unknown Customer",
         });
       }
 
       const [newOrder] = await tx.insert(ordersTable).values({
         id: order.id,
-        organizationId: orgId,                           // 🔒 Scoped
+        organizationId: orgId,
         customerId,
         extractionType: 'chat_log',
-        rawAiResponse: order.items,                      // audit/debug copy
+        rawAiResponse: order.items,
         totalAmount: order.total,
         deliveryAddress: order.delivery_address,
         deliveryDate: order.delivery_date,
@@ -409,7 +394,7 @@ export class DatabaseStorage implements IStorage {
         .set({ invoice })
         .where(and(
           eq(ordersTable.id, orderId),
-          eq(ordersTable.organizationId, orgId),         // 🔒 Data isolation
+          eq(ordersTable.organizationId, orgId),
           isNull(ordersTable.deletedAt)
         ))
         .returning();
@@ -425,7 +410,6 @@ export class DatabaseStorage implements IStorage {
   async updateChatOrderDetails(orgId: string, id: string, updates: Partial<ExtractedChatOrder>): Promise<ExtractedChatOrder | undefined> {
     return await db.transaction(async (tx) => {
       const dbUpdates: any = {};
-      // Note: items are managed in the normalized order_items table, not as a JSONB column
       if (updates.total !== undefined) dbUpdates.totalAmount = updates.total;
       if (updates.delivery_address !== undefined) dbUpdates.deliveryAddress = updates.delivery_address;
       if (updates.delivery_date !== undefined) dbUpdates.deliveryDate = updates.delivery_date;
@@ -436,14 +420,14 @@ export class DatabaseStorage implements IStorage {
         .set(dbUpdates)
         .where(and(
           eq(ordersTable.id, id),
-          eq(ordersTable.organizationId, orgId),         // 🔒 Data isolation
+          eq(ordersTable.organizationId, orgId),
           isNull(ordersTable.deletedAt)
         ))
         .returning();
 
       if (!updatedOrder) return undefined;
 
-      // Update normalized items if provided (delete-then-insert pattern)
+      // Replace items if provided (delete-then-insert)
       let itemRows: any[] = [];
       if (updates.items !== undefined) {
         await tx.delete(orderItemsTable).where(eq(orderItemsTable.orderId, id));
@@ -471,7 +455,7 @@ export class DatabaseStorage implements IStorage {
           .set({ name: updates.customer_name })
           .where(and(
             eq(customersTable.id, customer.id),
-            eq(customersTable.organizationId, orgId)     // 🔒 Data isolation
+            eq(customersTable.organizationId, orgId)
           ))
           .returning();
         return mapToExtractedChatOrder(updatedOrder, updatedCustomer, itemRows);
@@ -481,9 +465,7 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  // ==========================================
-  // TRANSACTIONAL BUSINESS LOGIC
-  // ==========================================
+  // --- Transactional business logic ---
 
   async generateAndAttachInvoice(
     orgId: string,
@@ -496,24 +478,23 @@ export class DatabaseStorage implements IStorage {
         .innerJoin(customersTable, eq(ordersTable.customerId, customersTable.id))
         .where(and(
           eq(ordersTable.id, orderId),
-          eq(ordersTable.organizationId, orgId),         // 🔒 Data isolation
+          eq(ordersTable.organizationId, orgId),
           isNull(ordersTable.deletedAt)
         ));
 
       if (result.length === 0) {
         tx.rollback();
         return undefined;
-      }
+      } 
 
-      // Invoice sequence is scoped per organization so each org has its own INV-YYYY-NNN series
+      // Invoice sequence is scoped per organization
       const maxSeqResult = await tx.select({ maxSeq: max(ordersTable.invoiceSequence) })
         .from(ordersTable)
-        .where(eq(ordersTable.organizationId, orgId));   // 🔒 Org-scoped sequence
+        .where(eq(ordersTable.organizationId, orgId));
         
       const nextSequenceNumber = (maxSeqResult[0]?.maxSeq || 0) + 1;
 
       const { order: dbOrder, customer: dbCustomer } = result[0];
-      // Load normalized items once — used for both invoice generation and the return value
       const orderItems = await tx.select().from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
       const chatOrder = mapToExtractedChatOrder(dbOrder, dbCustomer, orderItems);
       
@@ -527,7 +508,7 @@ export class DatabaseStorage implements IStorage {
         })
         .where(and(
           eq(ordersTable.id, orderId),
-          eq(ordersTable.organizationId, orgId)          // 🔒 Security check
+          eq(ordersTable.organizationId, orgId)
         ))
         .returning();
 

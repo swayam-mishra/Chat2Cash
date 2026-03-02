@@ -14,7 +14,7 @@ export class AppError extends Error {
   }
 }
 
-// Wrapper to eliminate try-catch blocks in controllers
+/** Wrapper that eliminates try-catch blocks in controllers. */
 export const asyncHandler = (fn: Function) => (req: Request, res: Response, next: NextFunction) => {
   Promise.resolve(fn(req, res, next)).catch(next);
 };
@@ -22,7 +22,6 @@ export const asyncHandler = (fn: Function) => (req: Request, res: Response, next
 export const globalErrorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
   logError(`Error processing request ${req.method} ${req.url}`, err);
 
-  // 1. Handle Zod Validation Errors
   if (err instanceof ZodError) {
     return res.status(400).json({
       status: "error",
@@ -31,7 +30,6 @@ export const globalErrorHandler = (err: any, req: Request, res: Response, next: 
     });
   }
 
-  // 2. Handle Trusted Operational Errors
   if (err instanceof AppError) {
     return res.status(err.statusCode).json({
       status: "error",
@@ -39,7 +37,6 @@ export const globalErrorHandler = (err: any, req: Request, res: Response, next: 
     });
   }
 
-  // 3. Handle JSON Parsing Errors
   if (err instanceof SyntaxError && 'body' in err) {
     return res.status(400).json({
       status: "error",
@@ -48,7 +45,7 @@ export const globalErrorHandler = (err: any, req: Request, res: Response, next: 
   }
 
   // 4. Handle Unknown/Server Errors
-  // In production, don't leak stack traces
+  // Avoid leaking stack traces in production
   const isDev = process.env.NODE_ENV === 'development';
   
   return res.status(500).json({
