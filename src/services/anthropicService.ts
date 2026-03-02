@@ -93,6 +93,9 @@ async function extractWithTool(
     } catch (error: any) {
       lastError = error;
       const elapsed = Date.now() - callStart;
+      const status = error?.status ?? error?.statusCode ?? 0;
+      const isClientError = status >= 400 && status < 500 && status !== 429;
+      const isRateLimit = status === 429;
       
       // Fail fast on client errors (e.g. invalid API key)
       if (isClientError) {
