@@ -49,27 +49,25 @@ export const authHandler = async (req: Request, res: Response, next: NextFunctio
         const userId = payload.sub as string;
         const userEmail = payload.email as string;
 
-        // JIT sync: create user in local DB on first login
-        const existingUser = await db
-          .select()
-          .from(usersTable)
-          .where(eq(usersTable.id, userId))
-          .limit(1);
-
-        if (existingUser.length > 0) {
-          req.user = existingUser[0];
-        } else {
-          const [newUser] = await db
-            .insert(usersTable)
-            .values({
-              id: userId,
+        // Atomic JIT sync: upsert user in local DB on first login
+        // Prevents race conditions from concurrent requests by a new user
+        const [user] = await db
+          .insert(usersTable)
+          .values({
+            id: userId,
+            email: userEmail,
+            name: (payload.name as string) ?? "Unknown",
+          })
+          .onConflictDoUpdate({
+            target: usersTable.id,
+            set: {
               email: userEmail,
               name: (payload.name as string) ?? "Unknown",
-              // organizationId is assigned when the user creates/joins an org
-            })
-            .returning();
-          req.user = newUser;
-        }
+            },
+          })
+          .returning();
+
+        req.user = user;
 
         // Set org context from the user record
         if (req.user?.organizationId) {

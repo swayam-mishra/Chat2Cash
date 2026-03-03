@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { pgTable, text, real, jsonb, timestamp, integer, boolean, index } from "drizzle-orm/pg-core";
+import { pgTable, text, numeric, jsonb, timestamp, integer, boolean, index } from "drizzle-orm/pg-core";
+import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-zod";
 
 export const orderItemSchema = z.object({
   name: z.string(),
@@ -96,10 +97,7 @@ export type ChatMessage = z.infer<typeof chatMessageSchema>;
 export type ExtractOrderFromChatRequest = z.infer<typeof extractOrderFromChatRequestSchema>;
 export type ExtractedChatOrderItem = z.infer<typeof extractedChatOrderItemSchema>;
 export type ExtractedChatOrder = z.infer<typeof extractedChatOrderSchema>;
-export type UpdateChatOrderRequest = z.infer<typeof updateChatOrderSchema>; 
-export type InsertUser = { username: string; password: string };
-export type Organization = typeof organizationsTable.$inferSelect;
-export type User = { id: string; username: string; password: string };
+export type UpdateChatOrderRequest = z.infer<typeof updateChatOrderSchema>;
 
 // --- Database tables ---
 
@@ -117,7 +115,7 @@ export const businessProfilesTable = pgTable("business_profiles", {
   organizationId: text("organization_id").references(() => organizationsTable.id).notNull().unique(),
   businessName: text("business_name").notNull(),
   gstNumber: text("gst_number"),
-  taxRate: real("tax_rate").default(18.0),
+  taxRate: numeric("tax_rate", { precision: 5, scale: 2 }).default("18.00"),
   currency: text("currency").default("INR"),
   logoUrl: text("logo_url"),
   address: text("address"),
@@ -145,7 +143,7 @@ export const ordersTable = pgTable("orders", {
   customerId: text("customer_id").references(() => customersTable.id).notNull(),
   extractionType: text("extraction_type").notNull(), 
   rawAiResponse: jsonb("raw_ai_response").notNull(),
-  totalAmount: real("total_amount"),
+  totalAmount: numeric("total_amount", { precision: 12, scale: 2 }),
   currency: text("currency").default("INR"),
   
   deliveryDate: timestamp("delivery_date", { mode: 'string' }),
@@ -178,7 +176,7 @@ export const productsTable = pgTable("products", {
   organizationId: text("organization_id").references(() => organizationsTable.id).notNull(),
   name: text("name").notNull(),
   unit: text("unit"),
-  defaultPrice: real("default_price"),
+  defaultPrice: numeric("default_price", { precision: 12, scale: 2 }),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 }, (table) => {
   return {
@@ -192,10 +190,10 @@ export const orderItemsTable = pgTable("order_items", {
   organizationId: text("organization_id").references(() => organizationsTable.id).notNull(),
   productId: text("product_id").references(() => productsTable.id),
   productName: text("product_name").notNull(),
-  quantity: real("quantity").notNull(),
+  quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
   unit: text("unit"),
-  pricePerUnit: real("price_per_unit"),
-  totalPrice: real("total_price"),
+  pricePerUnit: numeric("price_per_unit", { precision: 12, scale: 2 }),
+  totalPrice: numeric("total_price", { precision: 12, scale: 2 }),
 }, (table) => {
   return {
     orderIdIdx: index("order_items_order_id_idx").on(table.orderId),
@@ -236,3 +234,39 @@ export const apiKeysTable = pgTable("api_keys", {
     hashIdx: index("api_key_hash_idx").on(table.keyHash),
   };
 });
+
+// --- Drizzle-Zod derived schemas (DRY: single source of truth) ---
+
+export const insertOrderSchema = createInsertSchema(ordersTable);
+export const selectOrderSchema = createSelectSchema(ordersTable);
+export const updateOrderDbSchema = createUpdateSchema(ordersTable);
+
+export const insertOrderItemSchema = createInsertSchema(orderItemsTable);
+export const selectOrderItemSchema = createSelectSchema(orderItemsTable);
+
+export const insertUserSchema = createInsertSchema(usersTable);
+export const selectUserSchema = createSelectSchema(usersTable);
+
+export const insertCustomerSchema = createInsertSchema(customersTable);
+export const selectCustomerSchema = createSelectSchema(customersTable);
+
+export const insertBusinessProfileSchema = createInsertSchema(businessProfilesTable);
+export const selectBusinessProfileSchema = createSelectSchema(businessProfilesTable);
+
+export const insertOrganizationSchema = createInsertSchema(organizationsTable);
+export const selectOrganizationSchema = createSelectSchema(organizationsTable);
+
+// --- Drizzle-Zod inferred types (replace manual type declarations) ---
+
+export type InsertOrder = z.infer<typeof insertOrderSchema>;
+export type SelectOrder = z.infer<typeof selectOrderSchema>;
+export type InsertOrderItem = z.infer<typeof insertOrderItemSchema>;
+export type SelectOrderItem = z.infer<typeof selectOrderItemSchema>;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = z.infer<typeof selectUserSchema>;
+export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
+export type SelectCustomer = z.infer<typeof selectCustomerSchema>;
+export type Organization = z.infer<typeof selectOrganizationSchema>;
+export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
+export type InsertBusinessProfile = z.infer<typeof insertBusinessProfileSchema>;
+export type SelectBusinessProfile = z.infer<typeof selectBusinessProfileSchema>;

@@ -49,13 +49,13 @@ function mapToExtractedOrder(orderRow: any, customerRow: any, itemRows: any[] = 
     items: itemRows.length > 0
       ? itemRows.map((i) => ({
           name: i.productName,
-          quantity: i.quantity,
+          quantity: Number(i.quantity),
           unit: i.unit ?? undefined,
-          pricePerUnit: i.pricePerUnit ?? undefined,
-          totalPrice: i.totalPrice ?? undefined,
+          pricePerUnit: i.pricePerUnit != null ? Number(i.pricePerUnit) : undefined,
+          totalPrice: i.totalPrice != null ? Number(i.totalPrice) : undefined,
         }))
       : orderRow.rawAiResponse ?? [],
-    totalAmount: orderRow.totalAmount || undefined,
+    totalAmount: orderRow.totalAmount != null ? Number(orderRow.totalAmount) : undefined,
     currency: orderRow.currency || "INR",
     notes: orderRow.specialInstructions || undefined,
     rawMessage: Array.isArray(orderRow.rawMessages)
@@ -75,14 +75,14 @@ function mapToExtractedChatOrder(orderRow: any, customerRow: any, itemRows: any[
     items: itemRows.length > 0
       ? itemRows.map((i) => ({
           product_name: i.productName,
-          quantity: i.quantity,
-          price: i.pricePerUnit ?? null,
+          quantity: Number(i.quantity),
+          price: i.pricePerUnit != null ? Number(i.pricePerUnit) : null,
         }))
       : orderRow.rawAiResponse ?? [],
     delivery_address: orderRow.deliveryAddress || undefined,
     delivery_date: orderRow.deliveryDate || undefined,
     special_instructions: orderRow.specialInstructions || undefined,
-    total: orderRow.totalAmount || undefined,
+    total: orderRow.totalAmount != null ? Number(orderRow.totalAmount) : undefined,
     confidence: orderRow.confidence,
     status: orderRow.status,
     created_at: orderRow.createdAt,
@@ -110,7 +110,7 @@ export class DatabaseStorage implements IStorage {
       return {
         businessName: result[0].businessName,
         gstNumber: result[0].gstNumber ?? "",
-        taxRate: result[0].taxRate ?? 18.0,
+        taxRate: Number(result[0].taxRate ?? 18),
         currency: result[0].currency ?? "INR",
         logoUrl: result[0].logoUrl,
         address: result[0].address,
