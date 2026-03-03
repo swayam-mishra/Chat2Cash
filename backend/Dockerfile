@@ -1,5 +1,6 @@
 # ════════════════════════════════════════════════════════════════
-# Phase 4: Multi-Stage Dockerfile
+# Multi-Stage Dockerfile — Backend API
+# Build context: repo root (so we can access package-lock.json)
 # Stage 1 — Install deps & compile TypeScript
 # Stage 2 — Copy only dist + production deps to slim Alpine image
 # Result: ~100MB image instead of ~1GB
@@ -10,14 +11,15 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files first for Docker layer caching
-COPY package.json package-lock.json tsconfig.json drizzle.config.ts ./
+# Copy root lockfile + backend package files for deterministic install
+COPY package-lock.json ./
+COPY backend/package.json backend/tsconfig.json backend/drizzle.config.ts ./
 
 # Install ALL dependencies (including devDependencies for tsc)
 RUN npm ci
 
 # Copy source code
-COPY src/ ./src/
+COPY backend/src/ ./src/
 
 # Compile TypeScript → JavaScript
 RUN npm run build
@@ -31,7 +33,8 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 WORKDIR /app
 
 # Copy package files and install production-only deps
-COPY package.json package-lock.json ./
+COPY package-lock.json ./
+COPY backend/package.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 # Copy compiled JavaScript from builder

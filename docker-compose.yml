@@ -38,8 +38,8 @@ services:
   # 3. API Server — handles HTTP requests only, no AI processing
   api:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     command: npm run dev
     restart: always
     ports:
@@ -63,8 +63,8 @@ services:
   #    Scale independently without touching the API tier
   worker:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     command: npm run dev:worker
     restart: always
     environment:
@@ -85,8 +85,8 @@ services:
   # 5. Frontend — Vite dev server (proxies /api to the API service)
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: frontend/Dockerfile
     ports:
       - "5173:5173"
     environment:

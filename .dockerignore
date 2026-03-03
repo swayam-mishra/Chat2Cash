@@ -1,0 +1,10 @@
+node_modules
+.git
+.github
+*.md
+.env*
+.vscode
+
+# Build outputs (will be regenerated inside Docker)
+backend/dist
+frontend/dist

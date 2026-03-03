@@ -1,4 +1,5 @@
 # ── Frontend Dockerfile ─────────────────────────────────────
+# Build context: repo root (so we can access package-lock.json)
 # Stage 1: Build — install deps & compile with Vite
 # Stage 2: Serve — lightweight nginx to serve static files
 # ────────────────────────────────────────────────────────────
@@ -8,10 +9,13 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
+# Copy root lockfile + frontend package files for deterministic install
+COPY package-lock.json ./
+COPY frontend/package.json ./
 RUN npm ci
 
-COPY . .
+# Copy source + config, then build
+COPY frontend/ ./
 RUN npm run build
 
 # ── Stage 2: Serve ─────────────────────────────────────────
