@@ -23,7 +23,24 @@ if (env.SENTRY_DSN) {
 }
 
 app.use(helmet());
-app.use(cors());
+
+// Restrict CORS to your frontend's origins
+const allowedOrigins = [
+  "http://localhost:5173", // Local Vite frontend
+  env.FRONTEND_URL // Production frontend URL from .env
+].filter(Boolean);
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+}));
+
 app.use(express.json());
 
 app.use(correlationId);

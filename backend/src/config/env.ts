@@ -33,6 +33,7 @@ const envSchema = z.object({
   AZURE_STORAGE_CONTAINER_NAME: z.string().default("invoices"),
 
   SENTRY_DSN: z.string().url().optional(),
+  FRONTEND_URL: z.string().url().optional(),
   DATABASE_CA_CERT: z.string().optional(),
 });
 
