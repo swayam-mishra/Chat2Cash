@@ -111,7 +111,7 @@ router.get("/jobs/:id", generalLimiter, orderController.getJobStatusById);
  *   event: error_event — { message } when the jobId is not found
  */
 router.get("/jobs/:id/stream", generalLimiter, async (req, res) => {
-  const { id } = req.params;
+  const id = req.params.id as string;
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");

@@ -192,7 +192,7 @@ export class DatabaseStorage implements IStorage {
         customerId: customer.id,
         extractionType: 'single_message',
         rawAiResponse: order.items,
-        totalAmount: order.totalAmount,
+        totalAmount: order.totalAmount != null ? String(order.totalAmount) : undefined,
         currency: order.currency,
         specialInstructions: order.notes,
         rawMessages: order.rawMessage,
@@ -209,10 +209,10 @@ export class DatabaseStorage implements IStorage {
               orderId: newOrder.id,
               organizationId: orgId,
               productName: item.name,
-              quantity: item.quantity,
+              quantity: String(item.quantity),
               unit: item.unit,
-              pricePerUnit: item.pricePerUnit,
-              totalPrice: item.totalPrice,
+              pricePerUnit: item.pricePerUnit != null ? String(item.pricePerUnit) : undefined,
+              totalPrice: item.totalPrice != null ? String(item.totalPrice) : undefined,
             }))
           ).returning()
         : [];
@@ -358,7 +358,7 @@ export class DatabaseStorage implements IStorage {
         customerId,
         extractionType: 'chat_log',
         rawAiResponse: order.items,
-        totalAmount: order.total,
+        totalAmount: order.total != null ? String(order.total) : undefined,
         deliveryAddress: order.delivery_address,
         deliveryDate: order.delivery_date,
         specialInstructions: order.special_instructions,
@@ -376,9 +376,9 @@ export class DatabaseStorage implements IStorage {
               orderId: newOrder.id,
               organizationId: orgId,
               productName: item.product_name,
-              quantity: item.quantity,
-              pricePerUnit: item.price ?? undefined,
-              totalPrice: item.price != null ? item.quantity * item.price : undefined,
+              quantity: String(item.quantity),
+              pricePerUnit: item.price != null ? String(item.price) : undefined,
+              totalPrice: item.price != null ? String(item.quantity * item.price) : undefined,
             }))
           ).returning()
         : [];
@@ -438,9 +438,9 @@ export class DatabaseStorage implements IStorage {
               orderId: id,
               organizationId: orgId,
               productName: item.product_name,
-              quantity: item.quantity,
-              pricePerUnit: item.price ?? undefined,
-              totalPrice: item.price != null ? item.quantity * item.price : undefined,
+              quantity: String(item.quantity),
+              pricePerUnit: item.price != null ? String(item.price) : undefined,
+              totalPrice: item.price != null ? String(item.quantity * item.price) : undefined,
             }))
           ).returning();
         }
