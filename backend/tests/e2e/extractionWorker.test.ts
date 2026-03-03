@@ -28,7 +28,19 @@ import {
   type SeededOrg,
 } from "../fixtures/mockDbState";
 
-// Mock Anthropic SDK — vi.mock is hoisted before any app imports
+// ---------------------------------------------------------------------------
+// Anthropic SDK mock
+//
+// vi.hoisted() lifts the mockCreate ref ABOVE vi.mock() hoisting so the same
+// function reference is visible both inside the factory and in test bodies.
+// This lets individual tests configure responses with mockResolvedValueOnce /
+// mockRejectedValueOnce without touching the module boundary.
+// ---------------------------------------------------------------------------
+
+const { mockCreate } = vi.hoisted(() => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  mockCreate: vi.fn<any, any>(),
+}));
 
 const MOCK_AI_RESPONSE = {
   customer_name: "Rahul Sharma",
@@ -43,26 +55,25 @@ const MOCK_AI_RESPONSE = {
   confidence: "high",
 };
 
-vi.mock("@anthropic-ai/sdk", () => {
-  return {
-    default: class MockAnthropic {
-      constructor(_opts?: any) {}
-      messages = {
-        create: vi.fn().mockResolvedValue({
-          content: [
-            {
-              type: "tool_use",
-              id: "mock_tool_call",
-              name: "record_chat_order",
-              input: MOCK_AI_RESPONSE,
-            },
-          ],
-          usage: { input_tokens: 350, output_tokens: 120 },
-        }),
-      };
+/** Canonical happy-path Anthropic response reused across tests. */
+const buildAiResponse = (input = MOCK_AI_RESPONSE) => ({
+  content: [
+    {
+      type: "tool_use",
+      id: "mock_tool_call",
+      name: "record_chat_order",
+      input,
     },
-  };
+  ],
+  usage: { input_tokens: 350, output_tokens: 120 },
 });
+
+vi.mock("@anthropic-ai/sdk", () => ({
+  default: class MockAnthropic {
+    constructor(_opts?: any) {}
+    messages = { create: mockCreate };
+  },
+}));
 
 // Lazy imports — must resolve after vi.mock registration
 type QueueServiceModule = typeof import("../../src/services/queueService");
@@ -96,6 +107,12 @@ describe("Extraction Worker E2E", () => {
   beforeEach(async () => {
     await clearAllTables(testDb);
     seeded = await seedTestOrg(testDb);
+
+    // Reset call history and install the default happy-path response so each
+    // test starts from a known state. Tests that need a custom response can
+    // call mockCreate.mockResolvedValueOnce(...) or mockRejectedValueOnce(...).
+    mockCreate.mockReset();
+    mockCreate.mockResolvedValue(buildAiResponse());
   });
 
   it("processes a chat_log job and inserts structured data into PostgreSQL", async () => {
@@ -211,6 +228,102 @@ describe("Extraction Worker E2E", () => {
 
     const failReason = await waitForJobFailure(worker, job.id!);
     expect(failReason).toContain("missing message or messages");
+  });
+
+  // ---------------------------------------------------------------------------
+  // single_message path
+  // ---------------------------------------------------------------------------
+
+  it("processes a single_message job and persists the order", async () => {
+    const SINGLE_MSG_RESPONSE = {
+      customer_name: "Priya Patel",
+      items: [{ product_name: "Sunflower Oil", quantity: 3, price: 150 }],
+      delivery_address: "15 Park Street, Mumbai",
+      delivery_date: null,
+      special_instructions: null,
+      total: 450,
+      confidence: "medium",
+    };
+
+    mockCreate.mockResolvedValueOnce(buildAiResponse(SINGLE_MSG_RESPONSE));
+
+    const job = await queueMod.extractionQueue.add("extract", {
+      type: "single_message" as const,
+      orgId: seeded.org.id,
+      message: "3 bottles sunflower oil chahiye, 15 Park Street Mumbai",
+    });
+
+    const result = await waitForJobCompletion(worker, job.id!);
+
+    expect(result.status).toBe("completed");
+    expect(result.orderId).toBeDefined();
+
+    const [dbOrder] = await testDb
+      .select()
+      .from(ordersTable)
+      .where(eq(ordersTable.id, result.orderId));
+
+    expect(dbOrder.extractionType).toBe("single_message");
+    expect(dbOrder.confidence).toBe("medium");
+    expect(dbOrder.totalAmount).toBe(450);
+
+    const items = await testDb
+      .select()
+      .from(orderItemsTable)
+      .where(eq(orderItemsTable.orderId, result.orderId));
+
+    expect(items).toHaveLength(1);
+    expect(items[0].productName).toBe("Sunflower Oil");
+    expect(items[0].quantity).toBe(3);
+    expect(items[0].pricePerUnit).toBe(150);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Retry on transient Anthropic error
+  // ---------------------------------------------------------------------------
+
+  it("retries the job once on a transient Anthropic error then succeeds", async () => {
+    // First call → transient 503; second call → success.
+    mockCreate
+      .mockRejectedValueOnce(new Error("Service temporarily unavailable"))
+      .mockResolvedValueOnce(buildAiResponse());
+
+    const messages: schema.ChatMessage[] = [
+      { sender: "Customer", text: "1 kg salt please" },
+    ];
+
+    // Allow 2 attempts so the retry path is exercised.
+    const job = await queueMod.extractionQueue.add(
+      "extract",
+      { type: "chat_log" as const, orgId: seeded.org.id, messages },
+      { attempts: 2 },
+    );
+
+    const result = await waitForJobCompletion(worker, job.id!, 30_000);
+
+    expect(result.status).toBe("completed");
+    // The mock must have been called exactly twice (fail + succeed)
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Observability: mock call count reflects number of enqueued jobs
+  // ---------------------------------------------------------------------------
+
+  it("calls the Anthropic SDK exactly once per job", async () => {
+    const messages: schema.ChatMessage[] = [
+      { sender: "Customer", text: "2 dozen eggs please" },
+    ];
+
+    const job = await queueMod.extractionQueue.add("extract", {
+      type: "chat_log" as const,
+      orgId: seeded.org.id,
+      messages,
+    });
+
+    await waitForJobCompletion(worker, job.id!);
+
+    expect(mockCreate).toHaveBeenCalledTimes(1);
   });
 });
 

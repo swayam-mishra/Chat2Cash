@@ -374,10 +374,12 @@ export async function retryAllFailedJobs(): Promise<number> {
 export async function shutdownQueue() {
   if (worker) {
     await worker.close();
+    worker = null; // reset singleton so startExtractionWorker() can reinitialise cleanly
     logger.info("Extraction worker shut down");
   }
   if (webhookWorker) {
     await webhookWorker.close();
+    webhookWorker = null; // reset singleton
     logger.info("Webhook worker shut down");
   }
   await extractionQueue.close();
