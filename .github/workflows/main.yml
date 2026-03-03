@@ -121,7 +121,7 @@ jobs:
 
       # ── Type-check ───────────────────────────────────────────────
       - name: TypeScript type check
-        run: npx tsc --noEmit
+        run: npx -w frontend tsc --noEmit
 
       # ── Production build (catches import errors, dead code) ──────
       - name: Build production bundle
