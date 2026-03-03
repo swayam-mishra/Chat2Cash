@@ -1,5 +1,6 @@
-import { Queue, Worker, Job } from "bullmq";
+import { Queue, Worker, Job, UnrecoverableError } from "bullmq";
 import IORedis from "ioredis";
+import * as Sentry from "@sentry/node";
 import { env } from "../config/env";
 import { logger } from "../middlewares/logger";
 import { getCorrelationId } from "../middlewares/logger";
@@ -134,7 +135,26 @@ export function startExtractionWorker(): Worker {
   });
 
   worker.on("failed", (job, err) => {
-    logger.error({ jobId: job?.id, err }, "Extraction job failed");
+    const isFinalAttempt = job !== undefined &&
+      job.attemptsMade >= (job.opts.attempts ?? 1);
+
+    if (isFinalAttempt) {
+      // Alert on hard-fail (all retries exhausted) so the team sees it immediately
+      logger.error({ jobId: job?.id, err }, "Extraction job hard-failed (DLQ)");
+      if (env.SENTRY_DSN) {
+        Sentry.captureException(err, {
+          tags: { queue: "order-extraction", jobId: job?.id ?? "unknown" },
+          extra: {
+            orgId: job?.data.orgId,
+            type: job?.data.type,
+            correlationId: job?.data.correlationId,
+            attemptsMade: job?.attemptsMade,
+          },
+        });
+      }
+    } else {
+      logger.warn({ jobId: job?.id, attempt: job?.attemptsMade, err }, "Extraction job failed (will retry)");
+    }
 
     // Enqueue failure webhook so the worker doesn't block
     if (job?.data.webhookUrl) {
@@ -183,7 +203,23 @@ export function startWebhookWorker(): Worker {
       });
 
       if (!response.ok) {
-        throw new Error(`Webhook returned ${response.status}: ${response.statusText}`);
+        const status = response.status;
+
+        // 4xx errors (except 408 Request Timeout and 429 Too Many Requests) are
+        // permanent client-side failures — retrying will never succeed, so drop
+        // the job immediately to avoid wasting up to 10 retry attempts.
+        const isRetryable =
+          status === 408 ||   // Request Timeout
+          status === 429 ||   // Too Many Requests
+          status >= 500;      // Server Error (transient)
+
+        if (!isRetryable) {
+          throw new UnrecoverableError(
+            `Webhook permanently failed with ${status} ${response.statusText} — dropping job (non-retryable client error)`
+          );
+        }
+
+        throw new Error(`Webhook returned ${status}: ${response.statusText}`);
       }
 
       logger.info({ jobId: job.id, correlationId }, "Webhook delivered successfully");
@@ -195,10 +231,35 @@ export function startWebhookWorker(): Worker {
   );
 
   webhookWorker.on("failed", (job, err) => {
-    logger.warn(
-      { jobId: job?.id, attempt: job?.attemptsMade, maxAttempts: 10, err: err.message },
-      "Webhook delivery failed (will retry)"
-    );
+    const isFinalAttempt = job !== undefined &&
+      job.attemptsMade >= (job.opts.attempts ?? 1);
+    const isUnrecoverable = err instanceof UnrecoverableError;
+
+    if (isFinalAttempt || isUnrecoverable) {
+      logger.error(
+        { jobId: job?.id, webhookUrl: job?.data.webhookUrl, err: err.message },
+        `Webhook delivery hard-failed${isUnrecoverable ? " (unrecoverable)" : " (retries exhausted)"}`
+      );
+      if (env.SENTRY_DSN) {
+        Sentry.captureException(err, {
+          tags: {
+            queue: "webhook-delivery",
+            jobId: job?.id ?? "unknown",
+            unrecoverable: String(isUnrecoverable),
+          },
+          extra: {
+            webhookUrl: job?.data.webhookUrl,
+            correlationId: job?.data.correlationId,
+            attemptsMade: job?.attemptsMade,
+          },
+        });
+      }
+    } else {
+      logger.warn(
+        { jobId: job?.id, attempt: job?.attemptsMade, maxAttempts: 10, err: err.message },
+        "Webhook delivery failed (will retry)"
+      );
+    }
   });
 
   webhookWorker.on("error", (err) => {
