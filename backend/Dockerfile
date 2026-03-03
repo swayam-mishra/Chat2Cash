@@ -1,9 +1,13 @@
 # ════════════════════════════════════════════════════════════════
 # Multi-Stage Dockerfile — Backend API
-# Build context: repo root (so we can access package-lock.json)
+# Build context: repo root
 # Stage 1 — Install deps & compile TypeScript
 # Stage 2 — Copy only dist + production deps to slim Alpine image
 # Result: ~100MB image instead of ~1GB
+#
+# Note: We use `npm install` (not `npm ci`) because the root
+# package-lock.json is a workspace lockfile that can't resolve
+# in isolation. CI validates the lockfile; Docker pins via ranges.
 # ════════════════════════════════════════════════════════════════
 
 # ── Stage 1: Build ─────────────────────────────────────────────
@@ -11,15 +15,15 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy root lockfile + backend package files for deterministic install
-COPY package-lock.json ./
-COPY backend/package.json backend/tsconfig.json backend/drizzle.config.ts ./
+# Copy backend package.json only
+COPY backend/package.json ./
 
 # Install ALL dependencies (including devDependencies for tsc)
-RUN npm ci
+RUN npm install
 
 # Copy source code
 COPY backend/src/ ./src/
+COPY backend/tsconfig.json backend/drizzle.config.ts ./
 
 # Compile TypeScript → JavaScript
 RUN npm run build
@@ -32,10 +36,9 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 WORKDIR /app
 
-# Copy package files and install production-only deps
-COPY package-lock.json ./
+# Copy package.json and install production-only deps
 COPY backend/package.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN npm install --omit=dev && npm cache clean --force
 
 # Copy compiled JavaScript from builder
 COPY --from=builder /app/dist ./dist
