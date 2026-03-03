@@ -16,6 +16,9 @@ import {
   Send,
   Printer,
 } from "lucide-react";
+import { useOrders } from "@/hooks/useApi";
+import type { Order as ApiOrder } from "@/lib/types";
+import { formatINR, formatDate, mapStatus, summarizeItems } from "@/lib/format";
 
 type Status = "Paid" | "Pending" | "Processing" | "Draft" | "Failed";
 
@@ -29,6 +32,25 @@ interface Order {
   date: string;
   source: string;
   notes?: string;
+}
+
+/** Convert a backend Order into the display shape used by the UI. */
+function toDisplayOrder(o: ApiOrder): Order {
+  return {
+    id: o.id,
+    customer: o.customer_name ?? "Unknown",
+    items: summarizeItems(o.items),
+    itemsList: o.items.map((i) => ({
+      name: i.product_name,
+      qty: `${i.quantity}`,
+      price: formatINR(i.price),
+    })),
+    amount: formatINR(o.total),
+    status: mapStatus(o.status),
+    date: formatDate(o.created_at),
+    source: o.raw_messages?.length ? "WhatsApp" : "Manual",
+    notes: o.special_instructions ?? undefined,
+  };
 }
 
 const statusStyles: Record<Status, { bg: string; color: string; icon: React.ReactNode }> = {
@@ -62,78 +84,7 @@ const LABEL: React.CSSProperties = {
   fontFamily: "'DM Sans', sans-serif",
 };
 
-const allOrders: Order[] = [
-  {
-    id: "ORD-0091", customer: "Amit Sharma", items: "2kg Aaloo, 1kg Pyaaz",
-    itemsList: [
-      { name: "Aaloo (Potato)", qty: "2 kg", price: "₹60" },
-      { name: "Pyaaz (Onion)", qty: "1 kg", price: "₹40" },
-      { name: "Delivery Charge", qty: "1", price: "₹80" },
-    ],
-    amount: "₹180", status: "Paid", date: "2 Mar, 11:42 AM", source: "WhatsApp",
-    notes: "Regular customer, weekly aaloo order",
-  },
-  {
-    id: "ORD-0090", customer: "Priya Gupta", items: "5 plate thali order",
-    itemsList: [
-      { name: "Veg Thali", qty: "3 plate", price: "₹450" },
-      { name: "Non-Veg Thali", qty: "2 plate", price: "₹300" },
-    ],
-    amount: "₹750", status: "Pending", date: "2 Mar, 10:30 AM", source: "WhatsApp",
-    notes: "Delivery by 7 PM. Office order.",
-  },
-  {
-    id: "ORD-0089", customer: "Rajesh Patel", items: "10 litre doodh",
-    itemsList: [
-      { name: "Full Cream Milk", qty: "10 L", price: "₹520" },
-    ],
-    amount: "₹520", status: "Processing", date: "2 Mar, 09:15 AM", source: "WhatsApp",
-  },
-  {
-    id: "ORD-0088", customer: "Neha Singh", items: "Bread x4, Butter x2",
-    itemsList: [
-      { name: "Bread (White)", qty: "4 pcs", price: "₹160" },
-      { name: "Amul Butter 100g", qty: "2 pcs", price: "₹110" },
-      { name: "Mixed Fruit Jam", qty: "1 pc", price: "₹50" },
-    ],
-    amount: "₹320", status: "Draft", date: "1 Mar, 06:20 PM", source: "Manual",
-    notes: "Qty unconfirmed for butter",
-  },
-  {
-    id: "ORD-0087", customer: "Vikram Joshi", items: "Chai patti 500g",
-    itemsList: [
-      { name: "Premium Chai Patti", qty: "500 g", price: "₹95" },
-    ],
-    amount: "₹95", status: "Paid", date: "1 Mar, 04:10 PM", source: "WhatsApp",
-  },
-  {
-    id: "ORD-0086", customer: "Sunita Devi", items: "Rice 5kg, Dal 2kg",
-    itemsList: [
-      { name: "Basmati Rice", qty: "5 kg", price: "₹350" },
-      { name: "Toor Dal", qty: "2 kg", price: "₹240" },
-    ],
-    amount: "₹590", status: "Paid", date: "1 Mar, 02:00 PM", source: "WhatsApp",
-  },
-  {
-    id: "ORD-0085", customer: "Manish Kumar", items: "Mixed vegetables",
-    itemsList: [
-      { name: "Tamatar", qty: "1 kg", price: "₹40" },
-      { name: "Shimla Mirch", qty: "500 g", price: "₹30" },
-      { name: "Gobhi", qty: "1 pc", price: "₹35" },
-      { name: "Palak", qty: "1 bunch", price: "₹20" },
-    ],
-    amount: "₹125", status: "Failed", date: "1 Mar, 11:30 AM", source: "WhatsApp",
-    notes: "Payment failed — retry needed",
-  },
-  {
-    id: "ORD-0084", customer: "Deepa Mehta", items: "Atta 10kg, Oil 5L",
-    itemsList: [
-      { name: "Whole Wheat Atta", qty: "10 kg", price: "₹420" },
-      { name: "Sunflower Oil", qty: "5 L", price: "₹600" },
-    ],
-    amount: "₹1,020", status: "Paid", date: "28 Feb, 05:45 PM", source: "Manual",
-  },
-];
+const FALLBACK_ORDERS: Order[] = [];
 
 const tabs: { label: string; status: Status | "All" }[] = [
   { label: "All Orders", status: "All" },
@@ -465,6 +416,10 @@ export function OrdersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
+  // Fetch real orders from the API
+  const { data: apiOrders, loading, error } = useOrders();
+  const allOrders: Order[] = apiOrders ? apiOrders.map(toDisplayOrder) : FALLBACK_ORDERS;
+
   const filtered = allOrders.filter((o) => {
     const matchesTab = activeTab === "All" || o.status === activeTab;
     const matchesSearch =
@@ -509,6 +464,22 @@ export function OrdersPage() {
           </span>
         </div>
       </div>
+
+      {/* Loading / Error states */}
+      {loading && (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 size={24} className="animate-spin" color="#2979FF" />
+          <span className="ml-2 text-[14px]" style={{ color: "#6B7280" }}>Loading orders…</span>
+        </div>
+      )}
+      {error && !loading && (
+        <div className="flex items-center justify-center py-8 mb-4" style={{ backgroundColor: "#FEF2F2", borderRadius: 12, border: "1px solid #FECACA" }}>
+          <AlertCircle size={16} color="#D32F2F" />
+          <span className="ml-2 text-[13px]" style={{ color: "#D32F2F" }}>
+            Failed to load orders. Using offline view.
+          </span>
+        </div>
+      )}
 
       {/* Filters bar */}
       <div

@@ -37,7 +37,9 @@ services:
 
   # 3. API Server — handles HTTP requests only, no AI processing
   api:
-    build: .
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     command: npm run dev
     restart: always
     ports:
@@ -50,6 +52,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       DEFAULT_BUSINESS_NAME: ${DEFAULT_BUSINESS_NAME:-Chat2Cash Store}
       DEFAULT_GST_NUMBER: ${DEFAULT_GST_NUMBER:-22AAAAA0000A1Z5}
+      FRONTEND_URL: http://localhost:5173
     depends_on:
       db:
         condition: service_healthy
@@ -59,7 +62,9 @@ services:
   # 4. Background Worker — handles AI extraction jobs only
   #    Scale independently without touching the API tier
   worker:
-    build: .
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     command: npm run dev:worker
     restart: always
     environment:
@@ -76,6 +81,18 @@ services:
         condition: service_healthy
     deploy:
       replicas: 2 # Scale horizontally — each replica polls the same queue
+
+  # 5. Frontend — Vite dev server (proxies /api to the API service)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      NODE_ENV: development
+    depends_on:
+      - api
 
 volumes:
   postgres_data:

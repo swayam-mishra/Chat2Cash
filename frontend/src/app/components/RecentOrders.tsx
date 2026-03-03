@@ -1,5 +1,7 @@
 import React from "react";
-import { Download, MessageCircle, Eye, PenLine } from "lucide-react";
+import { Download, MessageCircle, Eye, PenLine, Loader2 } from "lucide-react";
+import { useOrders } from "@/hooks/useApi";
+import { formatINR, formatDate, mapStatus, summarizeItems } from "@/lib/format";
 
 type Status = "Paid" | "Pending" | "Processing" | "Draft";
 
@@ -19,48 +21,14 @@ const statusStyles: Record<Status, { bg: string; color: string }> = {
   Draft: { bg: "#9E9E9E", color: "#FFFFFF" },
 };
 
-const orders: OrderRow[] = [
-  {
-    id: "#ORD-0091",
-    items: "2kg Aaloo, 1kg Pyaaz",
-    amount: "₹180",
-    status: "Paid",
-    action: "Invoice ↓",
-    actionIcon: <Download size={13} />,
-  },
-  {
-    id: "#ORD-0090",
-    items: "5 plate thali order",
-    amount: "₹750",
-    status: "Pending",
-    action: "Remind",
-    actionIcon: <MessageCircle size={13} />,
-  },
-  {
-    id: "#ORD-0089",
-    items: "10 litre doodh",
-    amount: "₹520",
-    status: "Processing",
-    action: "View",
-    actionIcon: <Eye size={13} />,
-  },
-  {
-    id: "#ORD-0088",
-    items: "Bread x4, Butter x2",
-    amount: "₹320",
-    status: "Draft",
-    action: "Complete",
-    actionIcon: <PenLine size={13} />,
-  },
-  {
-    id: "#ORD-0087",
-    items: "Chai patti 500g",
-    amount: "₹95",
-    status: "Paid",
-    action: "Invoice ↓",
-    actionIcon: <Download size={13} />,
-  },
-];
+function actionForStatus(status: Status): { action: string; icon: React.ReactNode } {
+  switch (status) {
+    case "Paid": return { action: "Invoice ↓", icon: <Download size={13} /> };
+    case "Pending": return { action: "Remind", icon: <MessageCircle size={13} /> };
+    case "Processing": return { action: "View", icon: <Eye size={13} /> };
+    case "Draft": return { action: "Complete", icon: <PenLine size={13} /> };
+  }
+}
 
 function RedactedPill() {
   return (
@@ -73,7 +41,6 @@ function RedactedPill() {
         fontSize: 12,
         fontWeight: 500,
         userSelect: "none",
-        filter: "blur(0px)",
         fontFamily: "'DM Sans', sans-serif",
         minWidth: 80,
         textAlign: "center",
@@ -87,6 +54,21 @@ function RedactedPill() {
 }
 
 export function RecentOrders() {
+  const { data: apiOrders, loading } = useOrders(5, 0);
+
+  const orders: OrderRow[] = (apiOrders ?? []).map((o) => {
+    const status = mapStatus(o.status) as Status;
+    const { action, icon } = actionForStatus(status);
+    return {
+      id: `#${o.id}`,
+      items: summarizeItems(o.items),
+      amount: formatINR(o.total),
+      status,
+      action,
+      actionIcon: icon,
+    };
+  });
+
   return (
     <div
       className="flex flex-col col-span-3"
@@ -143,7 +125,17 @@ export function RecentOrders() {
       </div>
 
       {/* Rows */}
-      {orders.map((order, i) => (
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 size={20} className="animate-spin" color="#2979FF" />
+          <span className="ml-2 text-[13px]" style={{ color: "#6B7280" }}>Loading…</span>
+        </div>
+      ) : orders.length === 0 ? (
+        <div className="flex items-center justify-center py-8">
+          <span className="text-[13px]" style={{ color: "#6B7280" }}>No orders yet.</span>
+        </div>
+      ) : (
+      orders.map((order, i) => (
         <div
           key={order.id}
           className="grid px-6 py-3.5 gap-3 items-center"
@@ -224,7 +216,8 @@ export function RecentOrders() {
             {order.action}
           </button>
         </div>
-      ))}
+      ))
+      )}
     </div>
   );
 }

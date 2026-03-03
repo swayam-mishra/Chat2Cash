@@ -1,5 +1,7 @@
 import React from "react";
-import { TrendingUp, AlertTriangle, Activity } from "lucide-react";
+import { TrendingUp, AlertTriangle, Activity, Loader2 } from "lucide-react";
+import { useStats, useQueueHealth } from "@/hooks/useApi";
+import { formatINR } from "@/lib/format";
 
 const cardBase: React.CSSProperties = {
   backgroundColor: "#FFFFFF",
@@ -11,6 +13,9 @@ const cardBase: React.CSSProperties = {
 };
 
 export function MetricCards({ onOpenAIHealth }: { onOpenAIHealth?: () => void }) {
+  const { data: stats, loading: statsLoading } = useStats();
+  const { data: queue, loading: queueLoading } = useQueueHealth();
+
   return (
     <>
       {/* Revenue Recovered */}
@@ -30,7 +35,7 @@ export function MetricCards({ onOpenAIHealth }: { onOpenAIHealth?: () => void })
         <span
           style={{ fontWeight: 700, fontSize: 32, color: "#1A1A2E", lineHeight: 1.1 }}
         >
-          ₹1,24,850
+          {statsLoading ? "…" : formatINR(stats?.total_revenue ?? 0)}
         </span>
         <div
           className="flex items-center gap-1.5 px-2.5 py-1 self-start mt-1"
@@ -66,13 +71,13 @@ export function MetricCards({ onOpenAIHealth }: { onOpenAIHealth?: () => void })
         <span
           style={{ fontWeight: 700, fontSize: 32, color: "#1A1A2E", lineHeight: 1.1 }}
         >
-          247
+          {statsLoading ? "…" : (stats?.total_orders ?? 0)}
         </span>
         <span
           className="text-[13px] mt-1"
           style={{ fontWeight: 500, color: "#6B7280" }}
         >
-          ↑ 18 today
+          {statsLoading ? "" : `${stats?.confirmed_orders ?? 0} confirmed`}
         </span>
       </div>
 
@@ -103,7 +108,7 @@ export function MetricCards({ onOpenAIHealth }: { onOpenAIHealth?: () => void })
         <span
           style={{ fontWeight: 700, fontSize: 32, color: "#FF6D00", lineHeight: 1.1 }}
         >
-          9
+          {statsLoading ? "…" : (stats?.pending_orders ?? 0)}
         </span>
       </div>
 
@@ -135,10 +140,10 @@ export function MetricCards({ onOpenAIHealth }: { onOpenAIHealth?: () => void })
         </span>
         <div className="flex flex-col gap-0.5 mt-1">
           <span style={{ fontWeight: 600, fontSize: 16, color: "#0D0F12" }}>
-            Active: <span style={{ color: "#1A1A2E" }}>2</span>
+            Active: <span style={{ color: "#1A1A2E" }}>{queueLoading ? "…" : (queue?.active ?? 0)}</span>
           </span>
           <span style={{ fontWeight: 600, fontSize: 16, color: "#0D0F12" }}>
-            Waiting: <span style={{ color: "#1A1A2E" }}>0</span>
+            Waiting: <span style={{ color: "#1A1A2E" }}>{queueLoading ? "…" : (queue?.waiting ?? 0)}</span>
           </span>
         </div>
         <div

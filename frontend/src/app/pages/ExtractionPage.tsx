@@ -10,7 +10,12 @@ import {
   PenLine,
   Lock,
   Shield,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
+import * as api from "@/lib/api";
+import type { Order } from "@/lib/types";
+import { formatINR } from "@/lib/format";
 
 /* ─── Design Tokens ─── */
 const CARD: React.CSSProperties = {
@@ -184,13 +189,7 @@ function FlagChip({
 }
 
 /* ─── Line Items Table ─── */
-const lineItems = [
-  { item: "Aaloo", qty: "2", unit: "kg", price: "₹40" },
-  { item: "Pyaaz", qty: "1", unit: "kg", price: "₹30" },
-  { item: "Namak", qty: "1", unit: "pkt", price: "₹20" },
-];
-
-function LineItemsTable() {
+function LineItemsTable({ lineItems }: { lineItems: { item: string; qty: string; unit: string; price: string }[] }) {
   return (
     <div
       style={{
@@ -268,7 +267,10 @@ function LineItemsTable() {
             color: "#1A1A2E",
           }}
         >
-          ₹90
+          {lineItems.reduce((sum, item) => {
+            const price = parseFloat(item.price.replace(/[₹,]/g, "")) || 0;
+            return sum + price;
+          }, 0).toLocaleString("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 0 })}
         </span>
       </div>
     </div>
@@ -279,13 +281,46 @@ function LineItemsTable() {
    MAIN PAGE COMPONENT
    ───────────────────────────────────── */
 export function ExtractionPage() {
-  const [extractionHistory] = useState(0);
+  const [extractedOrder, setExtractedOrder] = useState<Order | null>(null);
   const [chatInput, setChatInput] = useState("");
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [extractionTime, setExtractionTime] = useState<number | null>(null);
 
   const EXAMPLE_MSG =
     "ram bhai kal 5 kilo chawal aur 2 litre tel dena, evening time mein";
 
-  if (extractionHistory === 0) {
+  const handleExtract = async () => {
+    if (!chatInput.trim() || extracting) return;
+    setExtracting(true);
+    setExtractError(null);
+    const start = Date.now();
+    try {
+      const order = await api.extractMessage(chatInput.trim());
+      setExtractionTime(Date.now() - start);
+      setExtractedOrder(order);
+    } catch (err: any) {
+      setExtractError(err.message || "Extraction failed");
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  // Dynamic line items from the extracted order
+  const lineItems = extractedOrder
+    ? extractedOrder.items.map((i) => ({
+        item: i.product_name,
+        qty: String(i.quantity),
+        unit: "",
+        price: formatINR(i.price),
+      }))
+    : [
+        { item: "Aaloo", qty: "2", unit: "kg", price: "₹40" },
+        { item: "Pyaaz", qty: "1", unit: "kg", price: "₹30" },
+        { item: "Namak", qty: "1", unit: "pkt", price: "₹20" },
+      ];
+
+  if (!extractedOrder) {
     return (
       <div
         className="h-full overflow-y-auto flex flex-col"
@@ -536,10 +571,12 @@ export function ExtractionPage() {
               }}
             />
             <button
+              onClick={handleExtract}
+              disabled={extracting || !chatInput.trim()}
               className="flex items-center justify-center gap-2.5 w-full cursor-pointer"
               style={{
                 height: 56,
-                backgroundColor: "#1A1A2E",
+                backgroundColor: extracting ? "#6B7280" : "#1A1A2E",
                 borderRadius: 14,
                 border: "none",
                 fontFamily: "'DM Sans', sans-serif",
@@ -548,23 +585,33 @@ export function ExtractionPage() {
                 color: "#FFFFFF",
                 boxShadow: "0px 4px 20px rgba(26,26,46,0.18)",
                 transition: "all 0.2s",
+                opacity: (!chatInput.trim() && !extracting) ? 0.5 : 1,
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = "#2a2a44";
-                e.currentTarget.style.transform = "translateY(-1px)";
-                e.currentTarget.style.boxShadow =
-                  "0px 6px 28px rgba(26,26,46,0.25)";
+                if (!extracting) {
+                  e.currentTarget.style.backgroundColor = "#2a2a44";
+                  e.currentTarget.style.transform = "translateY(-1px)";
+                  e.currentTarget.style.boxShadow =
+                    "0px 6px 28px rgba(26,26,46,0.25)";
+                }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = "#1A1A2E";
-                e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow =
-                  "0px 4px 20px rgba(26,26,46,0.18)";
+                if (!extracting) {
+                  e.currentTarget.style.backgroundColor = "#1A1A2E";
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow =
+                    "0px 4px 20px rgba(26,26,46,0.18)";
+                }
               }}
             >
-              <Sparkles size={18} />
-              Extract Order with AI
+              {extracting ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
+              {extracting ? "Extracting…" : "Extract Order with AI"}
             </button>
+            {extractError && (
+              <div className="flex items-center gap-2 text-[13px] mt-1" style={{ color: "#D32F2F" }}>
+                <AlertCircle size={14} /> {extractError}
+              </div>
+            )}
           </div>
 
           {/* ── Trust Strip ── */}
@@ -642,7 +689,7 @@ export function ExtractionPage() {
               fontSize: 13,
             }}
           >
-            #EXT-0047
+            #EXT-{extractedOrder?.id?.slice(-4) ?? "0000"}
           </span>
         </div>
 
@@ -743,7 +790,7 @@ export function ExtractionPage() {
             {[
               "Language: Hinglish",
               "PII Redacted ✓",
-              "Extracted: 1.2s",
+              `Extracted: ${extractionTime ? (extractionTime / 1000).toFixed(1) + "s" : "—"}`,
             ].map((item, i) => (
               <span key={item} className="flex items-center gap-4">
                 {i > 0 && (
@@ -825,7 +872,7 @@ export function ExtractionPage() {
                   fontFamily: "'JetBrains Mono', monospace",
                 }}
               >
-                97%
+                {extractedOrder?.confidence === "high" ? "97%" : extractedOrder?.confidence === "medium" ? "75%" : "50%"}
               </span>
               <span
                 className="text-[11px]"
@@ -860,7 +907,7 @@ export function ExtractionPage() {
               >
                 <div className="flex flex-col gap-0.5">
                   <span style={{ ...LABEL, fontSize: 10 }}>ORDER ID</span>
-                  <span style={{ ...MONO, color: "#2979FF" }}>#ORD-0091</span>
+                  <span style={{ ...MONO, color: "#2979FF" }}>#{extractedOrder?.id ?? "—"}</span>
                 </div>
                 <div className="flex flex-col gap-0.5">
                   <span style={{ ...LABEL, fontSize: 10 }}>CUSTOMER</span>
@@ -899,7 +946,7 @@ export function ExtractionPage() {
               >
                 LINE ITEMS
               </span>
-              <LineItemsTable />
+              <LineItemsTable lineItems={lineItems} />
             </div>
 
             {/* ── Flags ── */}

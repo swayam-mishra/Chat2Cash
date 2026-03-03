@@ -1,8 +1,25 @@
 import React, { useState } from "react";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { useExtractMessage } from "@/hooks/useApi";
 
 export function QuickExtract() {
   const [text, setText] = useState("");
+  const { mutate: extract, loading, error } = useExtractMessage();
+  const [success, setSuccess] = useState(false);
+
+  const handleExtract = async () => {
+    if (!text.trim() || loading) return;
+    setSuccess(false);
+    try {
+      await extract(text.trim());
+      setSuccess(true);
+      setText("");
+      // Auto-clear success after 3s
+      setTimeout(() => setSuccess(false), 3000);
+    } catch {
+      // error state handled by hook
+    }
+  };
 
   return (
     <div
@@ -74,32 +91,49 @@ export function QuickExtract() {
           }
         />
         <button
+          onClick={handleExtract}
+          disabled={loading || !text.trim()}
           className="self-stretch flex items-center justify-center gap-2 py-3 cursor-pointer"
           style={{
             fontFamily: "'DM Sans', sans-serif",
             fontSize: 14,
             fontWeight: 600,
             color: "#FFFFFF",
-            backgroundColor: "#1A1A2E",
+            backgroundColor: loading ? "#6B7280" : "#1A1A2E",
             borderRadius: 10,
             border: "none",
             transition: "all 0.2s",
+            opacity: (!text.trim() && !loading) ? 0.5 : 1,
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "#2a2a44";
-            e.currentTarget.style.transform = "translateY(-1px)";
-            e.currentTarget.style.boxShadow =
-              "0px 4px 16px rgba(26,26,46,0.25)";
+            if (!loading) {
+              e.currentTarget.style.backgroundColor = "#2a2a44";
+              e.currentTarget.style.transform = "translateY(-1px)";
+              e.currentTarget.style.boxShadow =
+                "0px 4px 16px rgba(26,26,46,0.25)";
+            }
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "#1A1A2E";
-            e.currentTarget.style.transform = "translateY(0)";
-            e.currentTarget.style.boxShadow = "none";
+            if (!loading) {
+              e.currentTarget.style.backgroundColor = "#1A1A2E";
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "none";
+            }
           }}
         >
-          <Sparkles size={16} />
-          Extract with AI →
+          {loading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+          {loading ? "Extracting…" : "Extract with AI →"}
         </button>
+        {success && (
+          <div className="flex items-center gap-2 text-[13px]" style={{ color: "#00C853" }}>
+            <CheckCircle2 size={14} /> Order extracted successfully!
+          </div>
+        )}
+        {error && (
+          <div className="flex items-center gap-2 text-[13px]" style={{ color: "#D32F2F" }}>
+            <AlertCircle size={14} /> {error.message || "Extraction failed"}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,10 @@
-# Phase 4: CI/CD Pipeline
-# Runs on every push & PR to main — lint, test, audit, build Docker image.
+# CI/CD Pipeline — Monorepo (frontend + backend)
+# Runs on every push & PR to main.
+# Backend: type-check → unit tests → integration tests → audit
+# Frontend: type-check → production build
+# Docker: build & push both images (main branch only)
+#
+# Prerequisites: run `npm install` at repo root to generate package-lock.json
 
 name: CI/CD Pipeline
 
@@ -14,9 +19,9 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  # ── Step 1-4: Lint, Audit, Test, Build ─────────────────────────
-  ci:
-    name: Lint → Test → Audit → Build
+  # ── Backend CI ─────────────────────────────────────────────────
+  backend-ci:
+    name: Backend — Lint → Test → Audit
     runs-on: ubuntu-latest
 
     services:
@@ -44,8 +49,11 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+    defaults:
+      run:
+        working-directory: backend
+
     steps:
-      # ── Step 1: Checkout ─────────────────────────────────────────
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -55,19 +63,20 @@ jobs:
           node-version: 20
           cache: npm
 
-      # ── Step 2: Install ──────────────────────────────────────────
+      # Install all workspace deps from root (resolves cross-workspace links)
       - name: Install dependencies
         run: npm ci
+        working-directory: .
 
-      # ── Step 3: Lint (fail on unused variables/types) ────────────
+      # ── Type-check ───────────────────────────────────────────────
       - name: TypeScript type check
         run: npx tsc --noEmit
 
-      # ── Step 4: Test (fail if math is wrong) ─────────────────────
+      # ── Unit tests (no containers needed) ────────────────────────
       - name: Run unit tests
         run: npm run test:unit
 
-      # Integration tests need real DB + Redis (provided by services above)
+      # ── Integration tests (Postgres + Redis from services above) ─
       - name: Run integration tests
         env:
           DATABASE_URL: postgres://test:test@localhost:5432/chat2cash_test
@@ -82,14 +91,46 @@ jobs:
           npx drizzle-kit push
           npm run test:integration
 
-      # ── Dependency Audit (Phase 2: fail on high-severity vulns) ──
+      # ── Dependency audit (fail on high-severity) ─────────────────
       - name: Security audit
         run: npm audit --audit-level=high
+        working-directory: .
 
-  # ── Step 5: Build & Push Docker Image ──────────────────────────
+  # ── Frontend CI ────────────────────────────────────────────────
+  frontend-ci:
+    name: Frontend — Type-check → Build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: .
+
+      # ── Type-check ───────────────────────────────────────────────
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+
+      # ── Production build (catches import errors, dead code) ──────
+      - name: Build production bundle
+        run: npm run build
+
+  # ── Docker: Build & Push Both Images ───────────────────────────
   docker:
-    name: Build Docker Image
-    needs: ci
+    name: Build & Push Docker Images
+    needs: [backend-ci, frontend-ci]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
@@ -108,19 +149,38 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
+      # ── Backend image ────────────────────────────────────────────
+      - name: Backend image metadata
+        id: backend-meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api
           tags: |
             type=sha,prefix=
             type=raw,value=latest
 
-      - name: Build and push Docker image
+      - name: Build and push backend image
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ./backend
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.backend-meta.outputs.tags }}
+          labels: ${{ steps.backend-meta.outputs.labels }}
+
+      # ── Frontend image ───────────────────────────────────────────
+      - name: Frontend image metadata
+        id: frontend-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ steps.frontend-meta.outputs.tags }}
+          labels: ${{ steps.frontend-meta.outputs.labels }}

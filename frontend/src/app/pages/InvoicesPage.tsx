@@ -9,7 +9,10 @@ import {
   X,
   CheckCircle2,
   Leaf,
+  Loader2,
 } from "lucide-react";
+import { useOrders } from "@/hooks/useApi";
+import { formatINR, formatDateOnly } from "@/lib/format";
 
 /* ─── Design Tokens ─── */
 const CARD: React.CSSProperties = {
@@ -57,57 +60,8 @@ const statusStyles: Record<
   Pending: { bg: "#FF6D00", color: "#FFFFFF" },
 };
 
-/* ─── Mock Data ─── */
-const invoices: InvoiceRow[] = [
-  {
-    invoiceNo: "INV-2024-0091",
-    orderRef: "#ORD-0091",
-    date: "2 Mar 2026",
-    amount: "₹90.00",
-    gst: "₹4.50",
-    status: "Downloaded",
-  },
-  {
-    invoiceNo: "INV-2024-0090",
-    orderRef: "#ORD-0090",
-    date: "2 Mar 2026",
-    amount: "₹750.00",
-    gst: "₹37.50",
-    status: "Sent",
-  },
-  {
-    invoiceNo: "INV-2024-0089",
-    orderRef: "#ORD-0089",
-    date: "1 Mar 2026",
-    amount: "₹520.00",
-    gst: "₹26.00",
-    status: "Pending",
-  },
-  {
-    invoiceNo: "INV-2024-0088",
-    orderRef: "#ORD-0088",
-    date: "1 Mar 2026",
-    amount: "₹320.00",
-    gst: "₹16.00",
-    status: "Sent",
-  },
-  {
-    invoiceNo: "INV-2024-0087",
-    orderRef: "#ORD-0087",
-    date: "28 Feb 2026",
-    amount: "₹95.00",
-    gst: "₹4.75",
-    status: "Downloaded",
-  },
-  {
-    invoiceNo: "INV-2024-0086",
-    orderRef: "#ORD-0086",
-    date: "28 Feb 2026",
-    amount: "₹1,549.50",
-    gst: "₹77.48",
-    status: "Pending",
-  },
-];
+/* ─── Mock Data (fallback) ─── */
+const fallbackInvoices: InvoiceRow[] = [];
 
 /* ─── PII Blur Pill ─── */
 function RedactedPill({ width = 120 }: { width?: number }) {
@@ -573,6 +527,30 @@ function PDFPreviewPanel({ onClose }: { onClose: () => void }) {
    ────────────────────────────────────── */
 export function InvoicesPage() {
   const [previewOpen, setPreviewOpen] = useState(true);
+  const { data: apiOrders, loading } = useOrders();
+
+  // Derive invoices from orders that have invoice data
+  const invoices: InvoiceRow[] = (apiOrders ?? [])
+    .filter((o) => o.invoice != null)
+    .map((o) => ({
+      invoiceNo: o.invoice!.invoice_number,
+      orderRef: `#${o.id}`,
+      date: formatDateOnly(o.invoice!.date),
+      amount: formatINR(o.invoice!.total),
+      gst: formatINR(o.invoice!.cgst + o.invoice!.sgst + (o.invoice!.igst ?? 0)),
+      status: "Downloaded" as InvoiceStatus, // default; real status tracking can be added later
+    }));
+
+  // Compute metric values from real data
+  const totalInvoiced = invoices.reduce((sum, inv) => {
+    const n = parseFloat(inv.amount.replace(/[₹,]/g, "")) || 0;
+    return sum + n;
+  }, 0);
+  const totalGst = invoices.reduce((sum, inv) => {
+    const n = parseFloat(inv.gst.replace(/[₹,]/g, "")) || 0;
+    return sum + n;
+  }, 0);
+  const pendingCount = (apiOrders ?? []).filter((o) => o.invoice == null && o.status !== "cancelled").length;
 
   return (
     <div
@@ -624,10 +602,10 @@ export function InvoicesPage() {
               lineHeight: 1.1,
             }}
           >
-            ₹3,24,500
+            {loading ? "…" : formatINR(totalInvoiced)}
           </span>
           <span className="text-[12px]" style={{ color: "#6B7280", fontWeight: 400 }}>
-            from 47 invoices
+            from {invoices.length} invoices
           </span>
         </div>
 
@@ -654,7 +632,7 @@ export function InvoicesPage() {
               lineHeight: 1.1,
             }}
           >
-            ₹15,450
+            {loading ? "…" : formatINR(totalGst)}
           </span>
           <span className="text-[12px]" style={{ color: "#6B7280", fontWeight: 400 }}>
             CGST + SGST combined
@@ -684,10 +662,10 @@ export function InvoicesPage() {
               lineHeight: 1.1,
             }}
           >
-            12
+            {loading ? "…" : pendingCount}
           </span>
           <span className="text-[12px]" style={{ color: "#6B7280", fontWeight: 400 }}>
-            invoices not yet downloaded
+            orders without invoices
           </span>
         </div>
       </div>
