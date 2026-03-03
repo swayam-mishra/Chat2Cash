@@ -9,7 +9,7 @@ import { db } from "../config/db";
 import { sql } from "drizzle-orm";
 import { env } from "../config/env";
 import { logger } from "../middlewares/logger";
-import { getQueueHealth, getFailedJobs, retryFailedJob, retryAllFailedJobs } from "../services/queueService";
+import { getQueueHealth, getJobStatus, getFailedJobs, retryFailedJob, retryAllFailedJobs } from "../services/queueService";
 import { authHandler, requireOrg } from "../middlewares/authHandler";
 
 const router = Router();
@@ -97,6 +97,72 @@ router.post("/async/extract-order", extractLimiter, requireOrg, idempotency, san
 
 // Job status & queue health
 router.get("/jobs/:id", generalLimiter, orderController.getJobStatusById);
+
+/**
+ * SSE endpoint for real-time job status.
+ *
+ * The client connects once and receives `status` events pushed by the server
+ * as BullMQ progresses the job — no short-polling round trips needed.
+ * The connection is closed by the server when the job reaches a terminal state
+ * ("completed" or "failed"), or by the client at any time.
+ *
+ * Event types pushed:
+ *   event: status  — JobStatus JSON payload
+ *   event: error_event — { message } when the jobId is not found
+ */
+router.get("/jobs/:id/stream", generalLimiter, async (req, res) => {
+  const { id } = req.params;
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no"); // Disable Nginx proxy buffering
+  res.flushHeaders();
+
+  const TERMINAL_STATES = new Set(["completed", "failed"]);
+  const POLL_INTERVAL_MS = 1_000;
+
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const send = (eventName: string, data: unknown) => {
+    if (res.writableEnded) return;
+    res.write(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const tick = async () => {
+    try {
+      const status = await getJobStatus(id);
+
+      if (!status) {
+        send("error_event", { message: `Job ${id} not found` });
+        res.end();
+        return;
+      }
+
+      send("status", status);
+
+      if (TERMINAL_STATES.has(status.state)) {
+        res.end();
+        return;
+      }
+
+      // Job is still running — schedule next poll
+      timer = setTimeout(tick, POLL_INTERVAL_MS);
+    } catch (err) {
+      send("error_event", { message: "Internal error polling job status" });
+      res.end();
+    }
+  };
+
+  // Start polling loop
+  await tick();
+
+  // Clean up the timer when the client disconnects early
+  req.on("close", () => {
+    if (timer) clearTimeout(timer);
+    if (!res.writableEnded) res.end();
+  });
+});
 router.get("/queue/health", generalLimiter, orderController.getQueueStats);
 
 // Updates

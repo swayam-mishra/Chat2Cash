@@ -1,52 +1,64 @@
 import { useFetch, useMutation } from "./useFetch";
-import * as api from "@/lib/api";
+import { useApiClient } from "@/app/ApiClientContext";
 import type { Order, Stats, QueueHealth } from "@/lib/types";
 
 // ─── Orders ───────────────────────────────────────────────
 
 export function useOrders(limit = 50, offset = 0) {
-  return useFetch<Order[]>(() => api.getOrders(limit, offset), [limit, offset]);
+  const client = useApiClient();
+  return useFetch<Order[]>(() => client.getOrders(limit, offset), [limit, offset]);
 }
 
 export function useOrder(id: string | null) {
+  const client = useApiClient();
   return useFetch<Order | null>(
-    () => (id ? api.getOrder(id) : Promise.resolve(null)),
+    () => (id ? client.getOrder(id) : Promise.resolve(null)),
     [id],
   );
 }
 
 export function useUpdateOrderStatus() {
-  return useMutation(api.updateOrderStatus);
+  const client = useApiClient();
+  return useMutation(client.updateOrderStatus);
 }
 
 export function useDeleteOrder() {
-  return useMutation(api.deleteOrder);
+  const client = useApiClient();
+  return useMutation(client.deleteOrder);
 }
 
 // ─── Stats ────────────────────────────────────────────────
 
 export function useStats() {
-  return useFetch<Stats>(() => api.getStats(), []);
+  const client = useApiClient();
+  return useFetch<Stats>(() => client.getStats(), []);
 }
 
 // ─── Queue Health ─────────────────────────────────────────
 
 export function useQueueHealth() {
-  return useFetch<QueueHealth>(() => api.queueHealth(), []);
+  const client = useApiClient();
+  return useFetch<QueueHealth>(() => client.queueHealth(), []);
 }
 
 // ─── Extraction ───────────────────────────────────────────
 
 export function useExtractMessage() {
-  return useMutation(api.extractMessage);
+  const client = useApiClient();
+  return useMutation(client.extractMessage);
 }
 
 export function useExtractChat() {
-  return useMutation(api.extractChat);
+  const client = useApiClient();
+  return useMutation(client.extractChat);
 }
 
 // ─── Invoices ─────────────────────────────────────────────
 
 export function useGenerateInvoice() {
-  return useMutation(api.generateInvoice);
+  const client = useApiClient();
+  return useMutation(client.generateInvoice);
 }
+
+// Re-export context hook so callers only need one import
+export { useApiClient } from "@/app/ApiClientContext";

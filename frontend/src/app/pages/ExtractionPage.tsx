@@ -13,7 +13,7 @@ import {
   Loader2,
   AlertCircle,
 } from "lucide-react";
-import * as api from "@/lib/api";
+import { useApiClient } from "@/app/ApiClientContext";
 import type { Order } from "@/lib/types";
 import { formatINR } from "@/lib/format";
 
@@ -281,6 +281,7 @@ function LineItemsTable({ lineItems }: { lineItems: { item: string; qty: string;
    MAIN PAGE COMPONENT
    ───────────────────────────────────── */
 export function ExtractionPage() {
+  const client = useApiClient();
   const [extractedOrder, setExtractedOrder] = useState<Order | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [extracting, setExtracting] = useState(false);
@@ -296,7 +297,7 @@ export function ExtractionPage() {
     setExtractError(null);
     const start = Date.now();
     try {
-      const order = await api.extractMessage(chatInput.trim());
+      const order = await client.extractMessage(chatInput.trim());
       setExtractionTime(Date.now() - start);
       setExtractedOrder(order);
     } catch (err: any) {

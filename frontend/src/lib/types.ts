@@ -84,9 +84,13 @@ export interface AsyncJobResponse {
 }
 
 export interface JobStatus {
-  id: string;
-  state: string;
+  jobId: string;
+  state: "waiting" | "active" | "completed" | "failed" | "delayed";
   progress: number;
   result?: Order;
-  failedReason?: string;
+  error?: string;
+  createdAt?: string;
+  processedAt?: string;
+  completedAt?: string;
+  attempts?: number;
 }
