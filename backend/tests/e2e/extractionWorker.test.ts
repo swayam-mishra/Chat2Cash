@@ -151,7 +151,7 @@ describe("Extraction Worker E2E", () => {
     expect(dbOrder.extractionType).toBe("chat_log");
     expect(dbOrder.confidence).toBe("high");
     expect(dbOrder.status).toBe("pending");
-    expect(dbOrder.totalAmount).toBe(790);
+    expect(dbOrder.totalAmount).toBe("790.00");
     expect(dbOrder.deliveryAddress).toBe("42 MG Road, Bangalore");
     expect(dbOrder.specialInstructions).toBe("Jaldi bhej do bhaiya");
 
@@ -169,14 +169,14 @@ describe("Extraction Worker E2E", () => {
     const dal = items.find((i) => i.productName === "Toor Dal");
 
     expect(rice).toBeDefined();
-    expect(rice!.quantity).toBe(5);
-    expect(rice!.pricePerUnit).toBe(120);
-    expect(rice!.totalPrice).toBe(600); // 5 × 120
+    expect(rice!.quantity).toBe("5.000");
+    expect(rice!.pricePerUnit).toBe("120.00");
+    expect(rice!.totalPrice).toBe("600.00"); // 5 × 120
 
     expect(dal).toBeDefined();
-    expect(dal!.quantity).toBe(2);
-    expect(dal!.pricePerUnit).toBe(95);
-    expect(dal!.totalPrice).toBe(190); // 2 × 95
+    expect(dal!.quantity).toBe("2.000");
+    expect(dal!.pricePerUnit).toBe("95.00");
+    expect(dal!.totalPrice).toBe("190.00"); // 2 × 95
 
     const [customer] = await testDb
       .select()
@@ -263,7 +263,7 @@ describe("Extraction Worker E2E", () => {
 
     expect(dbOrder.extractionType).toBe("single_message");
     expect(dbOrder.confidence).toBe("0.8");
-    expect(dbOrder.totalAmount).toBe("450");
+    expect(dbOrder.totalAmount).toBe("450.00");
 
     const items = await testDb
       .select()
@@ -272,8 +272,8 @@ describe("Extraction Worker E2E", () => {
 
     expect(items).toHaveLength(1);
     expect(items[0].productName).toBe("Sunflower Oil");
-    expect(items[0].quantity).toBe("3");
-    expect(items[0].pricePerUnit).toBe("150");
+    expect(items[0].quantity).toBe("3.000");
+    expect(items[0].pricePerUnit).toBe("150.00");
   });
 
   // ---------------------------------------------------------------------------
