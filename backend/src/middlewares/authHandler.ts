@@ -25,15 +25,32 @@ export const authHandler = async (req: Request, res: Response, next: NextFunctio
   try {
     // API Key authentication (machine access)
     if (apiKeyHeader) {
-      const hash = crypto.createHash("sha256").update(apiKeyHeader).digest("hex");
+      // Compute hash as a Buffer so we can use timingSafeEqual below
+      const incomingHash = crypto.createHash("sha256").update(apiKeyHeader).digest();
+      const incomingHashHex = incomingHash.toString("hex");
 
+      // Fetch by hash (indexed column) — also select the stored hash so we
+      // can verify it at the application layer with a constant-time comparison.
+      // This closes the timing oracle that would exist if we relied solely on
+      // the database string equality check (DB query latency differs between
+      // "row found" and "row not found", leaking whether a hash prefix is valid).
       const result = await db
-        .select({ orgId: apiKeysTable.organizationId })
+        .select({ orgId: apiKeysTable.organizationId, keyHash: apiKeysTable.keyHash })
         .from(apiKeysTable)
-        .where(and(eq(apiKeysTable.keyHash, hash), eq(apiKeysTable.isActive, true)))
+        .where(and(eq(apiKeysTable.keyHash, incomingHashHex), eq(apiKeysTable.isActive, true)))
         .limit(1);
 
       if (result.length === 0) throw new AppError("Invalid API Key", 401);
+
+      // Constant-time comparison — prevents timing side-channel attacks where
+      // an attacker could infer hash byte values from response-time variance.
+      const storedHash = Buffer.from(result[0].keyHash, "hex");
+      if (
+        storedHash.length !== incomingHash.length ||
+        !crypto.timingSafeEqual(incomingHash, storedHash)
+      ) {
+        throw new AppError("Invalid API Key", 401);
+      }
 
       req.orgId = result[0].orgId;
       return next();

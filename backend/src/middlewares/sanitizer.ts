@@ -1,37 +1,23 @@
 import { Request, Response, NextFunction } from "express";
 
-/** Escapes HTML special characters to prevent XSS in string values. */
-function escapeHtml(text: string): string {
-  if (typeof text !== 'string') return text;
-  return text
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-/** Recursively sanitizes all string values in an object or array. */
-function sanitizeObject(obj: any): any {
-  if (Array.isArray(obj)) {
-    return obj.map(v => sanitizeObject(v));
-  }
-  if (obj !== null && typeof obj === 'object') {
-    const newObj: any = {};
-    for (const key in obj) {
-      if (Object.prototype.hasOwnProperty.call(obj, key)) {
-        newObj[key] = sanitizeObject(obj[key]);
-      }
-    }
-    return newObj;
-  }
-  if (typeof obj === 'string') {
-    return escapeHtml(obj);
-  }
-  return obj;
-}
-
-/** Express middleware that sanitizes all string values in `req.body`. */
-export const sanitizeInputs = (req: Request, res: Response, next: NextFunction) => {
-  if (req.body) {
-    req.body = sanitizeObject(req.body);
-  }
+/**
+ * Input sanitization is handled entirely by Zod at the controller layer:
+ *
+ * - `.strict()` schemas (e.g. updateChatOrderSchema) reject unknown fields.
+ * - Type-specific validators (z.string(), z.number(), …) enforce shape.
+ *
+ * The previous recursive HTML-escape approach was removed for two reasons:
+ *
+ * 1. Performance — deep-cloning and regex-replacing every string in large chat
+ *    payloads is O(n) CPU work on the hot path for every write request.
+ *
+ * 2. Data corruption — escaping "<" / ">" mutates user content before it
+ *    reaches the LLM (e.g. "width < 5cm" → "width &lt; 5cm"), causing
+ *    misinterpretation and storing corrupted data in the database.
+ *
+ * XSS prevention is a rendering concern: sanitize on the *frontend* at
+ * render time (e.g. with DOMPurify), not when writing to the database.
+ */
+export const sanitizeInputs = (_req: Request, _res: Response, next: NextFunction) => {
   next();
 };
