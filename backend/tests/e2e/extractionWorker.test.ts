@@ -236,13 +236,11 @@ describe("Extraction Worker E2E", () => {
 
   it("processes a single_message job and persists the order", async () => {
     const SINGLE_MSG_RESPONSE = {
-      customer_name: "Priya Patel",
-      items: [{ product_name: "Sunflower Oil", quantity: 3, price: 150 }],
-      delivery_address: "15 Park Street, Mumbai",
-      delivery_date: null,
-      special_instructions: null,
-      total: 450,
-      confidence: "medium",
+      customerName: "Priya Patel",
+      items: [{ name: "Sunflower Oil", quantity: 3, pricePerUnit: 150 }],
+      notes: "15 Park Street, Mumbai",
+      totalAmount: 450,
+      confidence: 0.8,
     };
 
     mockCreate.mockResolvedValueOnce(buildAiResponse(SINGLE_MSG_RESPONSE));
@@ -264,8 +262,8 @@ describe("Extraction Worker E2E", () => {
       .where(eq(ordersTable.id, result.orderId));
 
     expect(dbOrder.extractionType).toBe("single_message");
-    expect(dbOrder.confidence).toBe("medium");
-    expect(dbOrder.totalAmount).toBe(450);
+    expect(dbOrder.confidence).toBe("0.8");
+    expect(dbOrder.totalAmount).toBe("450");
 
     const items = await testDb
       .select()
@@ -274,8 +272,8 @@ describe("Extraction Worker E2E", () => {
 
     expect(items).toHaveLength(1);
     expect(items[0].productName).toBe("Sunflower Oil");
-    expect(items[0].quantity).toBe(3);
-    expect(items[0].pricePerUnit).toBe(150);
+    expect(items[0].quantity).toBe("3");
+    expect(items[0].pricePerUnit).toBe("150");
   });
 
   // ---------------------------------------------------------------------------

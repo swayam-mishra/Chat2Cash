@@ -251,7 +251,7 @@ export async function extractOrderFromChat(messages: ChatMessage[]): Promise<Ext
   log(`Chat extraction complete — customer: ${parsed.customer_name || "unknown"}, ${parsed.items?.length || 0} items, confidence: ${parsed.confidence}`, "anthropic");
 
   const order: ExtractedChatOrder = {
-    id: String(Date.now()),
+    id: randomUUID(),
     customer_name: parsed.customer_name || null,
     items: Array.isArray(parsed.items)
       ? parsed.items.map((item: any) => ({
