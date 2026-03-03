@@ -4,6 +4,7 @@ import * as invoiceController from "../controllers/invoiceController";
 import { extractLimiter, generalLimiter } from "../middlewares/rateLimiter";
 import { sanitizeInputs } from "../middlewares/sanitizer";
 import { redactPII } from "../middlewares/piiRedactor";
+import { idempotency } from "../middlewares/idempotency";
 import { db } from "../config/db";
 import { sql } from "drizzle-orm";
 import { env } from "../config/env";
@@ -85,14 +86,14 @@ router.get("/orders/:id", generalLimiter, requireOrg, redactPII, orderController
 // Invoice download
 router.get("/orders/:id/download", generalLimiter, requireOrg, invoiceController.downloadInvoice);
 
-// Write operations
-router.post("/extract", extractLimiter, requireOrg, sanitizeInputs, orderController.extractOrder);
-router.post("/extract-order", extractLimiter, requireOrg, sanitizeInputs, orderController.extractChatOrder);
-router.post("/generate-invoice", extractLimiter, requireOrg, sanitizeInputs, invoiceController.generateInvoice);
+// Write operations — idempotency is opt-in via Idempotency-Key header
+router.post("/extract", extractLimiter, requireOrg, idempotency, sanitizeInputs, orderController.extractOrder);
+router.post("/extract-order", extractLimiter, requireOrg, idempotency, sanitizeInputs, orderController.extractChatOrder);
+router.post("/generate-invoice", extractLimiter, requireOrg, idempotency, sanitizeInputs, invoiceController.generateInvoice);
 
 // Async extraction (returns 202 with job ID)
-router.post("/async/extract", extractLimiter, requireOrg, sanitizeInputs, orderController.asyncExtractOrder);
-router.post("/async/extract-order", extractLimiter, requireOrg, sanitizeInputs, orderController.asyncExtractChatOrder);
+router.post("/async/extract", extractLimiter, requireOrg, idempotency, sanitizeInputs, orderController.asyncExtractOrder);
+router.post("/async/extract-order", extractLimiter, requireOrg, idempotency, sanitizeInputs, orderController.asyncExtractChatOrder);
 
 // Job status & queue health
 router.get("/jobs/:id", generalLimiter, orderController.getJobStatusById);

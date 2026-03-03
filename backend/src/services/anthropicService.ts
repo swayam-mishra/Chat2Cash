@@ -4,6 +4,23 @@ import type { ExtractedOrder, ChatMessage, ExtractedChatOrder } from "../schema"
 import { log, logError } from "../middlewares/logger";
 import { getPrompt } from "./promptManager";
 import { env } from "../config/env";
+import { getEncoding, type Tiktoken } from "js-tiktoken";
+
+/**
+ * cl100k_base is the closest public approximation to Claude's BPE tokenizer.
+ * It consistently handles multi-byte scripts (Devanagari, Arabic, CJK) which
+ * can consume 2-3× more tokens per character than ASCII — the root cause of
+ * accidental Token Limit Exceeded errors on Hinglish conversations.
+ */
+let _encoder: Tiktoken | null = null;
+function getEncoder(): Tiktoken {
+  if (!_encoder) _encoder = getEncoding("cl100k_base");
+  return _encoder;
+}
+
+function countTokens(text: string): number {
+  return getEncoder().encode(text).length;
+}
 
 const DEFAULT_MODEL_STR = env.AI_MODEL_SMART;
 const CHAT_EXTRACT_MODEL = env.AI_MODEL_SMART;
@@ -18,16 +35,31 @@ const anthropic = new Anthropic({
   timeout: REQUEST_TIMEOUT_MS,
 });
 
-function applySlidingWindow(messages: ChatMessage[], maxChars: number = 12000): ChatMessage[] {
-  let currentCount = 0;
+/**
+ * Trim the message list so the conversation fits within maxTokens.
+ *
+ * Uses the cl100k_base tokenizer (js-tiktoken) instead of character count.
+ * Character count is unreliable for mixed-language text: Devanagari/Hindi
+ * script consumes ~2-3 tokens per character, so a 12 000-char limit can
+ * silently exceed Claude's input budget on Hinglish chats.
+ *
+ * Token budget is deliberately set 20 % below the character-equivalent
+ * to leave headroom for the system prompt and output tokens.
+ */
+function applySlidingWindow(messages: ChatMessage[], maxTokens: number = 8000): ChatMessage[] {
+  let currentTokens = 0;
   const pruned: ChatMessage[] = [];
-  
+
   for (let i = messages.length - 1; i >= 0; i--) {
-    currentCount += messages[i].text.length;
-    if (currentCount > maxChars) break;
+    // Approximate the wire format seen by the model: "sender: text\n"
+    const line = `${messages[i].sender}: ${messages[i].text}\n`;
+    const lineTokens = countTokens(line);
+    if (currentTokens + lineTokens > maxTokens) break;
+    currentTokens += lineTokens;
     pruned.unshift(messages[i]);
   }
-  
+
+  log(`applySlidingWindow: kept ${pruned.length}/${messages.length} messages (~${currentTokens} tokens)`, "anthropic");
   return pruned;
 }
 

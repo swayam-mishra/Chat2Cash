@@ -7,17 +7,21 @@ import * as anthropicService from "./anthropicService";
 import { storage } from "./storageService";
 import type { ChatMessage } from "../schema";
 
-// --- Redis connection ---
+/**
+ * BullMQ requires its own dedicated IORedis connection with
+ * maxRetriesPerRequest: null — it must NOT share the instance in
+ * src/config/redis.ts which uses maxRetriesPerRequest: 3.
+ */
 const connection = new IORedis(env.REDIS_URL, {
   maxRetriesPerRequest: null,
 });
 
 connection.on("error", (err) => {
-  logger.error({ err }, "Redis connection error");
+  logger.error({ err }, "BullMQ Redis connection error");
 });
 
 connection.on("connect", () => {
-  logger.info("Redis connected for job queue");
+  logger.info("BullMQ Redis connected for job queue");
 });
 
 // --- Queue definitions ---
